@@ -5,7 +5,7 @@ import { AIStackParamList } from '../../types/navigation';
 import { ROUTES } from '../../types/navigation';
 
 // Import screens - Using new TypeScript screens from src/screens/
-import AIAssistantScreen from '../screens/AIAssistantScreen';
+import AIAssistantScreen from '../../screens/AIAssistantScreen';
 
 const Stack = createStackNavigator<AIStackParamList>();
 

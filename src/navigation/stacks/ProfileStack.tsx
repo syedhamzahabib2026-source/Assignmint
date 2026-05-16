@@ -5,22 +5,22 @@ import { ProfileStackParamList } from '../../types/navigation';
 import { ROUTES } from '../../types/navigation';
 
 // Import screens - Using new TypeScript screens from src/screens/
-import ProfileScreen from '../screens/ProfileScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import AppearanceSettingsScreen from '../screens/AppearanceSettingsScreen';
-import NotificationPreferencesScreen from '../screens/NotificationPreferencesScreen';
-import LanguageSelectionScreen from '../screens/LanguageSelectionScreen';
-import DownloadPreferencesScreen from '../screens/DownloadPreferencesScreen';
-import BetaFeaturesScreen from '../screens/BetaFeaturesScreen';
-import PaymentsScreen from '../screens/PaymentsScreen';
-import AddPaymentMethodScreen from '../screens/AddPaymentMethodScreen';
-import WalletScreen from '../screens/WalletScreen';
-import ContactSupportScreen from '../screens/ContactSupportScreen';
-import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
-import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
-import AIAssistantScreen from '../screens/AIAssistantScreen';
-import AnalyticsScreen from '../screens/AnalyticsScreen';
-import IconTestScreen from '../screens/IconTestScreen';
+import ProfileScreen from '../../screens/ProfileScreen';
+import SettingsScreen from '../../screens/SettingsScreen';
+import AppearanceSettingsScreen from '../../screens/AppearanceSettingsScreen';
+import NotificationPreferencesScreen from '../../screens/NotificationPreferencesScreen';
+import LanguageSelectionScreen from '../../screens/LanguageSelectionScreen';
+import DownloadPreferencesScreen from '../../screens/DownloadPreferencesScreen';
+import BetaFeaturesScreen from '../../screens/BetaFeaturesScreen';
+import PaymentsScreen from '../../screens/PaymentsScreen';
+import AddPaymentMethodScreen from '../../screens/AddPaymentMethodScreen';
+import WalletScreen from '../../screens/WalletScreen';
+import ContactSupportScreen from '../../screens/ContactSupportScreen';
+import TermsOfServiceScreen from '../../screens/TermsOfServiceScreen';
+import PrivacyPolicyScreen from '../../screens/PrivacyPolicyScreen';
+import AIAssistantScreen from '../../screens/AIAssistantScreen';
+import AnalyticsScreen from '../../screens/AnalyticsScreen';
+import IconTestScreen from '../../screens/IconTestScreen';
 
 const Stack = createStackNavigator<ProfileStackParamList>();
 

@@ -4,10 +4,10 @@ import { COLORS } from '../../constants';
 import { TasksStackParamList, ROUTES } from '../types';
 
 // Import screens - Using new TypeScript screens from src/screens/
-import MyTasksScreen from '../screens/MyTasksScreen';
-import TaskDetailsScreen from '../screens/TaskDetailsScreen';
-import UploadDeliveryScreen from '../screens/UploadDeliveryScreen';
-import ChatThreadScreen from '../screens/ChatThreadScreen';
+import MyTasksScreen from '../../screens/MyTasksScreen';
+import TaskDetailsScreen from '../../screens/TaskDetailsScreen';
+import UploadDeliveryScreen from '../../screens/UploadDeliveryScreen';
+import ChatThreadScreen from '../../screens/ChatThreadScreen';
 
 const Stack = createStackNavigator<TasksStackParamList>();
 

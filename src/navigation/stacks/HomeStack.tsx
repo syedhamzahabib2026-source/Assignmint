@@ -5,12 +5,12 @@ import { HomeStackParamList } from '../../types/navigation';
 import { ROUTES } from '../../types/navigation';
 
 // Import screens - Using new TypeScript screens from src/screens/
-import HomeScreen from '../screens/HomeScreen';
-import TaskDetailsScreen from '../screens/TaskDetailsScreen';
-import ChatThreadScreen from '../screens/ChatThreadScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import MessagesScreen from '../screens/MessagesScreen';
-import NavigationTestScreen from '../screens/NavigationTestScreen';
+import HomeScreen from '../../screens/HomeScreen';
+import TaskDetailsScreen from '../../screens/TaskDetailsScreen';
+import ChatThreadScreen from '../../screens/ChatThreadScreen';
+import NotificationsScreen from '../../screens/NotificationsScreen';
+import MessagesScreen from '../../screens/MessagesScreen';
+import NavigationTestScreen from '../../screens/NavigationTestScreen';
 
 const Stack = createStackNavigator<HomeStackParamList>();
 

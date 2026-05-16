@@ -5,8 +5,8 @@ import { PostStackParamList } from '../../types/navigation';
 import { ROUTES } from '../../types/navigation';
 
 // Import screens - Using new TypeScript screens from src/screens/
-import PostTaskScreen from '../screens/PostTaskScreen';
-import TaskPostedConfirmation from '../screens/TaskPostedConfirmation';
+import PostTaskScreen from '../../screens/PostTaskScreen';
+import TaskPostedConfirmation from '../../screens/TaskPostedConfirmation';
 
 const Stack = createStackNavigator<PostStackParamList>();
 
