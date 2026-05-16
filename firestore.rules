@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isParticipant(participants) {
+      return isAuthenticated() && request.auth.uid in participants;
+    }
+    
+    function isValidUser(userData) {
+      return userData.keys().hasAll(['email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+             userData.email is string &&
+             userData.displayName is string &&
+             userData.role in ['requester', 'expert', 'both'];
+    }
+    
+    function isValidTask(taskData) {
+      return taskData.keys().hasAll(['title', 'description', 'subject', 'price', 'deadline', 'status', 'createdBy']) &&
+             taskData.title is string &&
+             taskData.description is string &&
+             taskData.subject is string &&
+             taskData.price is number &&
+             taskData.deadline is timestamp &&
+             taskData.status in ['open', 'in_progress', 'completed', 'cancelled'] &&
+             taskData.createdBy is string;
+    }
+    
+    function isValidMessage(messageData) {
+      return messageData.keys().hasAll(['senderId', 'senderName', 'text', 'timestamp', 'type']) &&
+             messageData.senderId is string &&
+             messageData.senderName is string &&
+             messageData.text is string &&
+             messageData.timestamp is timestamp &&
+             messageData.type in ['text', 'image', 'file', 'system'];
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(resource.data);
+      allow update: if isOwner(userId) && 
+                      isValidUser(resource.data) &&
+                      resource.data.uid == userId;
+      allow delete: if isOwner(userId);
+    }
+
+    // Tasks collection
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                      isValidTask(resource.data) &&
+                      resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        // Task creator can update their own tasks
+        resource.data.createdBy == request.auth.uid ||
+        // Task assignee can update status and completion
+        (resource.data.completedBy == request.auth.uid && 
+         request.resource.data.keys().hasOnly(['status', 'completedAt', 'updatedAt']))
+      );
+      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Chats collection
+    match /chats/{chatId} {
+      allow read, create, update: if isAuthenticated() && 
+                                    isParticipant(resource.data.participants);
+      allow delete: if false; // Chats should not be deleted
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && 
+                      isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isAuthenticated() && 
+                        isValidMessage(resource.data) &&
+                        resource.data.senderId == request.auth.uid &&
+                        isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow update: if isAuthenticated() && 
+                        resource.data.senderId == request.auth.uid &&
+                        request.resource.data.keys().hasOnly(['isRead', 'readBy']);
+        allow delete: if false; // Messages should not be deleted
+      }
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read, update: if isAuthenticated() && 
+                            resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid;
+    }
+
+    // Wallets collection
+    match /wallets/{userId} {
+      allow read, update: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow delete: if false; // Wallets should not be deleted
+    }
+
+    // Transactions collection
+    match /transactions/{transactionId} {
+      allow read, create: if isAuthenticated() && 
+                            resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.keys().hasOnly(['status', 'completedAt', 'metadata']);
+      allow delete: if false; // Transactions should not be deleted
+    }
+
+    // AI Sessions collection
+    match /aiSessions/{sessionId} {
+      allow read, create, update, delete: if isAuthenticated() && 
+                                            resource.data.userId == request.auth.uid;
+    }
+
+    // Admin functions (for Cloud Functions)
+    match /admin/{document=**} {
+      allow read, write: if false; // Only Cloud Functions can access admin documents
+    }
+  }
+}

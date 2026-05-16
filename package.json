@@ -1,0 +1,135 @@
+{
+  "name": "Assignmint",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "lint": "eslint .",
+    "start": "react-native start",
+    "test": "jest --watchAll=false",
+    "test:ci": "jest --runInBand",
+    "test:auth": "jest tests/auth --runInBand",
+    "test:firebase": "node tests/firebase/runAllTests.js",
+    "test:firebase:connection": "node tests/firebase/testConnection.js",
+    "test:firebase:messages": "node tests/firebase/testMessagesEmulator.js",
+    "test:firebase:messages:live": "node tests/firebase/testMessages.js",
+    "test:firebase:create-demo": "node tests/firebase/createPersistentMessages.js",
+    "test:firebase:tasks": "node tests/firebase/testTasks.js",
+    "test:firebase:userflow": "node tests/firebase/testUserFlow.js",
+    "test:firebase:posting": "node tests/firebase/testTaskPosting.js",
+    "test:firebase:realtime": "node tests/firebase/testRealTimeUpdates.js",
+    "test:firebase:create-user": "node tests/firebase/createTestUser.js",
+    "validate:screens": "node scripts/validate-screens-doc.js",
+    "check:entry": "node scripts/checkEntry.js",
+    "check:screens-map": "node scripts/checkScreensMap.js",
+    "typecheck": "tsc --noEmit",
+    "lint:fix": "eslint . --fix",
+    "seed:matching": "npx ts-node scripts/seedMatchingData.ts",
+    "seed:matching:clear": "npx ts-node scripts/seedMatchingData.ts clear",
+    "test:matching": "node scripts/testMatching.js",
+    "qa": "cross-env USE_MOCK=true RESERVE_WINDOW_SEC=5 MATCH_WAVE_MINUTES=0.1 tsx qa_smoke/run.ts",
+    "qa:clean": "rimraf qa_smoke",
+    "qa:doctor": "node qa_smoke/doctor.js",
+    "emu:start": "firebase emulators:start --only auth,firestore --import=.firebase-emulator-data --export-on-exit",
+    "detox:build": "detox build -c ios.debug",
+    "detox:test": "detox test -c ios.debug",
+    "e2e": "concurrently -k -s first \"cross-env E2E=true npm run emu:start\" \"npm:detox:build && cross-env E2E=true npm:detox:test\"",
+    "clean:rn": "pkill -f 'react-native start' || true && watchman watch-del-all && rm -rf $TMPDIR/react-* $TMPDIR/haste-* $TMPDIR/metro-* && rm -rf ios/Pods ios/Podfile.lock && rm -rf ~/Library/Developer/Xcode/DerivedData && npm install && cd ios && pod install && cd ..",
+    "start:clean": "bash -lc \"killall -9 node || true; watchman watch-del-all || true; rm -rf $TMPDIR/metro-* $TMPDIR/haste-* $TMPDIR/react-*; rm -rf node_modules; npm install; npm start --reset-cache\"",
+    "ios:rebuild": "bash -lc \"cd ios && rm -rf Pods Podfile.lock && pod install --repo-update && cd .. && npx react-native run-ios\""
+  },
+  "dependencies": {
+    "@gorhom/bottom-sheet": "^5.0.6",
+    "@invertase/react-native-apple-authentication": "^2.4.1",
+    "@react-native-async-storage/async-storage": "^1.24.0",
+    "@react-native-firebase/app": "^17.5.0",
+    "@react-native-firebase/auth": "^17.5.0",
+    "@react-native-firebase/firestore": "^17.5.0",
+    "@react-native-firebase/messaging": "^17.5.0",
+    "@react-native/virtualized-lists": "^0.79.2",
+    "@react-navigation/bottom-tabs": "^7.4.5",
+    "@react-navigation/elements": "2.5.2",
+    "@react-navigation/native": "^7.1.17",
+    "@react-navigation/stack": "^7.4.5",
+    "@stripe/stripe-react-native": "^0.53.1",
+    "dotenv": "^17.2.1",
+    "react": "18.3.1",
+    "react-native": "0.72.15",
+    "react-native-config": "^1.5.7",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-reanimated": "~3.3.0",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.11.1",
+    "react-native-vector-icons": "^10.3.0",
+    "semver": "^7.7.2",
+    "zustand": "^5.0.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.28.4",
+    "@react-native-community/cli": "^18.0.0",
+    "@react-native-community/cli-platform-android": "18.0.0",
+    "@react-native-community/cli-platform-ios": "18.0.0",
+    "@react-native/babel-preset": "0.79.2",
+    "@react-native/eslint-config": "0.79.2",
+    "@react-native/metro-config": "^0.79.2",
+    "@react-native/typescript-config": "0.79.2",
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^13.3.1",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.3.0",
+    "@types/react": "~18.3.12",
+    "@types/react-native-vector-icons": "^6.4.18",
+    "@types/react-test-renderer": "^18.3.0",
+    "concurrently": "^9.2.0",
+    "cross-env": "^10.0.0",
+    "detox": "^20.40.2",
+    "eslint": "^8.19.0",
+    "firebase-admin": "^13.5.0",
+    "firebase-tools": "^14.12.1",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.7.0",
+    "jest-circus": "^30.0.5",
+    "patch-package": "^8.0.0",
+    "prettier": "2.8.8",
+    "react-test-renderer": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.4.1",
+    "tsx": "^4.20.4",
+    "typescript": "~5.8.3",
+    "vitest": "^3.2.4",
+    "whatwg-fetch": "^3.6.20"
+  },
+  "detox": {
+    "testRunner": "jest",
+    "runnerConfig": "e2e/jest.config.js",
+    "apps": {
+      "ios.debug": {
+        "type": "ios.app",
+        "build": "xcodebuild -workspace ios/*.xcworkspace -scheme Assignmint -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build",
+        "binaryPath": "ios/build/Build/Products/Debug-iphonesimulator/Assignmint.app"
+      }
+    },
+    "devices": {
+      "simulator": {
+        "type": "ios.simulator",
+        "device": {
+          "type": "iPhone 16"
+        },
+        "bootArgs": "--no-sandbox"
+      }
+    },
+    "configurations": {
+      "ios.debug": {
+        "device": "simulator",
+        "app": "ios.debug"
+      }
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
