@@ -20,11 +20,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // Update state so the next render will show the fallback UI
     return {
       hasError: true,
       error,
-      errorCode: this.getErrorCode(error)
+      errorCode: ErrorBoundary.getErrorCode(error),
     };
   }
 
