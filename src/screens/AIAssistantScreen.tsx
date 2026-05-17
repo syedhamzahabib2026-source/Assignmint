@@ -18,6 +18,7 @@ import { COLORS, FONTS, SPACING } from '../constants';
 import { useAIChat } from '../hooks/useAIChat';
 import Icon, { Icons } from '../components/common/Icon';
 import AIApiService from '../services/AIApiService';
+import { useAuth } from '../state/AuthProvider';
 
 interface Message {
   id: string;

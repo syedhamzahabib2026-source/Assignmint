@@ -15,7 +15,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import Icon, { Icons } from '../components/common/Icon';
 import { useAuth } from '../state/AuthProvider';
 import { analytics, ANALYTICS_EVENTS } from '../services/AnalyticsService';
-import { DEV_MODE, COLORS } from '../constants';
+import { COLORS } from '../constants';
 import { firestoreService } from '../services/firestoreService';
 import { stripeService } from '../services/stripeService';
 import { User, Task, Transaction } from '../types/firestore';
@@ -198,38 +198,8 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     Alert.alert('Link Payment Method', 'Payment method linking feature coming soon!');
   };
 
-  const handleTestIcons = () => {
-    navigation.navigate('IconTest');
-  };
-
   const handleScreenCatalog = () => {
     navigation.navigate('ScreenCatalog');
-  };
-
-  const handleToggleMode = () => {
-    if (mode === 'guest') {
-      // Switch to user mode with mock user
-      const mockUser = {
-        id: 'dev-user-id',
-        email: 'dev@assignmint.com',
-        name: 'Dev User',
-        hasPaymentMethod: false,
-      };
-      // The original code had upgradeFromGuest here, but upgradeFromGuest is removed from useAuthStore.
-      // This function is no longer relevant for switching modes.
-      // For now, we'll just log a message or remove it if it's truly obsolete.
-      // Since the prompt doesn't explicitly ask to remove this function,
-      // I'll keep it but note its potential redundancy.
-      console.log('Switching to user mode with mock user:', mockUser);
-    } else {
-      // Switch to guest mode
-      // The original code had setGuestMode here, but setGuestMode is removed from useAuthStore.
-      // This function is no longer relevant for switching modes.
-      // For now, we'll just log a message or remove it if it's truly obsolete.
-      // Since the prompt doesn't explicitly ask to remove this function,
-      // I'll keep it but note its potential redundancy.
-      console.log('Switching to guest mode');
-    }
   };
 
   const handleMenuPress = (menuItem: string) => {
@@ -528,9 +498,6 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettings}>
           <Icon name={Icons.settings} size={24} color="#8E8E93" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.settingsButton} onPress={handleTestIcons}>
-          <Icon name={Icons.help} size={24} color="#8E8E93" />
-        </TouchableOpacity>
         <TouchableOpacity style={styles.settingsButton} onPress={handleScreenCatalog}>
           <Icon name={Icons.apps} size={24} color="#8E8E93" />
         </TouchableOpacity>
@@ -542,21 +509,6 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
         </TouchableOpacity>
       </View>
-
-      {/* DEV MODE Toggle */}
-      {DEV_MODE && (
-        <View style={styles.devToggleContainer}>
-          <Text style={styles.devToggleLabel}>DEV: {mode === 'guest' ? 'Guest' : 'User'} Mode</Text>
-          <TouchableOpacity
-            style={[styles.devToggleButton, mode === 'guest' ? styles.devToggleGuest : styles.devToggleUser]}
-            onPress={handleToggleMode}
-          >
-            <Text style={styles.devToggleButtonText}>
-              Switch to {mode === 'guest' ? 'User' : 'Guest'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* Guest Sign-In CTA */}
       {mode === 'guest' && !user && (

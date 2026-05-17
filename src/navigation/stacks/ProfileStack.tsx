@@ -20,7 +20,6 @@ import TermsOfServiceScreen from '../../screens/TermsOfServiceScreen';
 import PrivacyPolicyScreen from '../../screens/PrivacyPolicyScreen';
 import AIAssistantScreen from '../../screens/AIAssistantScreen';
 import AnalyticsScreen from '../../screens/AnalyticsScreen';
-import IconTestScreen from '../../screens/IconTestScreen';
 
 const Stack = createStackNavigator<ProfileStackParamList>();
 
@@ -158,14 +157,6 @@ const ProfileStack = () => {
         component={AnalyticsScreen}
         options={{
           title: 'Analytics',
-          headerBackTitle: 'Back',
-        }}
-      />
-      <Stack.Screen
-        name={ROUTES.ICON_TEST}
-        component={IconTestScreen}
-        options={{
-          title: 'Icon Test',
           headerBackTitle: 'Back',
         }}
       />

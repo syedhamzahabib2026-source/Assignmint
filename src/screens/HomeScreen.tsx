@@ -24,7 +24,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { user, logout, mode, isGuestMode } = useAuth();
+  const { user, logout } = useAuth();
 
   const handleAccept = async (task: Task) => {
     if (!user) {
@@ -187,13 +187,6 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Debug Proof - Auth Mode and User Info */}
-      <View style={styles.userProofContainer}>
-        <Text style={styles.userProofText} testID="auth-mode">
-          Mode: {mode || 'None'} | {isGuestMode ? 'Guest Mode' : user?.email || 'No user'}
-        </Text>
-      </View>
-
       {/* Guest Mode Banner */}
       <GuestModeBanner
         onSignIn={() => {
@@ -370,18 +363,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
-  },
-  userProofContainer: {
-    backgroundColor: '#F0F0F0',
-    padding: 8,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  userProofText: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'monospace',
   },
   topBar: {
     flexDirection: 'row',

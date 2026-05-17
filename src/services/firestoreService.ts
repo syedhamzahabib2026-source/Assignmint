@@ -51,10 +51,10 @@ class FirestoreService {
   }
 
   async getUser(userId: string): Promise<User | null> {
-    const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
-    if (!userDoc.exists()) return null;
-    
-    return this.convertTimestamps({ id: userDoc.id, ...userDoc.data() }) as User;
+    const userDoc = await getFirebaseDb().collection(COLLECTIONS.USERS).doc(userId).get();
+    if (!userDoc.exists) return null;
+
+    return this.convertTimestamps({ uid: userDoc.id, ...userDoc.data() }) as User;
   }
 
   async updateUser(userId: string, updates: Partial<User>): Promise<void> {
