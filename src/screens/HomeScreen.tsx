@@ -18,7 +18,6 @@ import { GuestModeBanner } from '../components/common/GuestModeBanner';
 import { firestoreService } from '../services/firestoreService';
 import { Task } from '../types/firestore';
 import { fcmService } from '../services/fcmService';
-import { BackendTest } from '../components/BackendTest';
 
 const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -205,9 +204,6 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           // Could implement dismiss logic here
         }}
       />
-
-      {/* Backend Connection Test */}
-      <BackendTest />
 
       {/* Top Navigation Bar */}
       <View style={styles.topBar}>
