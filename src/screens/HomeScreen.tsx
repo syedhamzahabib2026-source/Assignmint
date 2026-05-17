@@ -266,17 +266,17 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     <Icon name={Icons.user} size={24} color={COLORS.textSecondary} />
                   </View>
                   <View style={styles.userDetails}>
-                    <Text style={styles.userName}>{task.ownerName}</Text>
-                    <Text style={styles.taskType}>offering {task.subject} Task</Text>
+                    <Text style={styles.userName}>{task.ownerName ?? 'Unknown'}</Text>
+                    <Text style={styles.taskType}>offering {task.subject ?? ''} Task</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.subjectBadge}>
-                <Text style={styles.subjectBadgeText}>{task.subject}</Text>
+                <Text style={styles.subjectBadgeText}>{task.subject ?? ''}</Text>
               </View>
 
-              <Text style={styles.taskTitle}>{task.title}</Text>
+              <Text style={styles.taskTitle}>{task.title ?? ''}</Text>
 
               {task.description && (
                 <Text style={styles.taskDescription} numberOfLines={3}>
@@ -287,11 +287,11 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <View style={styles.taskDetails}>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Budget:</Text>
-                  <Text style={styles.detailValue}>{formatPrice(task.price)}</Text>
+                  <Text style={styles.detailValue}>{formatPrice(task.price ?? 0)}</Text>
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Deadline:</Text>
-                  <Text style={styles.detailValue}>{formatDate(task.deadlineISO)}</Text>
+                  <Text style={styles.detailValue}>{formatDate(task.deadlineISO ?? task.deadline)}</Text>
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>AI Assistance:</Text>
@@ -299,11 +299,11 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Urgency:</Text>
-                  <Text style={[styles.detailValue, { 
-                    color: task.urgency === 'high' ? '#FF6B6B' : 
-                           task.urgency === 'medium' ? '#FFB366' : '#4ECDC4' 
+                  <Text style={[styles.detailValue, {
+                    color: task.urgency === 'high' ? '#FF6B6B' :
+                           task.urgency === 'medium' ? '#FFB366' : '#4ECDC4'
                   }]}>
-                    {task.urgency.charAt(0).toUpperCase() + task.urgency.slice(1)}
+                    {((task.urgency ?? 'low').charAt(0).toUpperCase() + (task.urgency ?? 'low').slice(1))}
                   </Text>
                 </View>
               </View>
