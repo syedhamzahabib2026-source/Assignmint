@@ -151,43 +151,41 @@ class FirestoreService {
   subscribeToTasks(
     queryParams: TaskQuery = {},
     callback: (tasks: Task[]) => void
-  ): Unsubscribe {
-    const constraints: QueryConstraint[] = [];
-    
+  ): () => void {
+    let ref: any = getFirebaseDb().collection(COLLECTIONS.TASKS);
+
     if (queryParams.status) {
-      constraints.push(where('status', '==', queryParams.status));
+      ref = ref.where('status', '==', queryParams.status);
     }
     if (queryParams.createdBy) {
-      constraints.push(where('createdBy', '==', queryParams.createdBy));
+      ref = ref.where('createdBy', '==', queryParams.createdBy);
     }
     if (queryParams.completedBy) {
-      constraints.push(where('completedBy', '==', queryParams.completedBy));
+      ref = ref.where('completedBy', '==', queryParams.completedBy);
     }
     if (queryParams.subject) {
-      constraints.push(where('subject', '==', queryParams.subject));
+      ref = ref.where('subject', '==', queryParams.subject);
     }
     if (queryParams.minPrice !== undefined) {
-      constraints.push(where('price', '>=', queryParams.minPrice));
+      ref = ref.where('price', '>=', queryParams.minPrice);
     }
     if (queryParams.maxPrice !== undefined) {
-      constraints.push(where('price', '<=', queryParams.maxPrice));
+      ref = ref.where('price', '<=', queryParams.maxPrice);
     }
     if (queryParams.urgency) {
-      constraints.push(where('urgency', '==', queryParams.urgency));
+      ref = ref.where('urgency', '==', queryParams.urgency);
     }
-    
+
     const orderByField = queryParams.orderBy || 'createdAt';
     const orderDirection = queryParams.orderDirection || 'desc';
-    constraints.push(orderBy(orderByField, orderDirection));
-    
+    ref = ref.orderBy(orderByField, orderDirection);
+
     if (queryParams.limit) {
-      constraints.push(limit(queryParams.limit));
+      ref = ref.limit(queryParams.limit);
     }
-    
-    const q = query(collection(db, COLLECTIONS.TASKS), ...constraints);
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const tasks = querySnapshot.docs.map(doc => 
+
+    return ref.onSnapshot((snapshot: any) => {
+      const tasks = snapshot.docs.map((doc: any) =>
         this.convertTimestamps({ id: doc.id, ...doc.data() }) as Task
       );
       callback(tasks);
