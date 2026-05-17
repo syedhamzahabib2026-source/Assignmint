@@ -168,11 +168,12 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     }
   };
 
-  const formatDate = (date: Date | string) => {
-    if (typeof date === 'string') {
-      return new Date(date).toLocaleDateString();
-    }
-    return date.toLocaleDateString();
+  const formatDate = (date: any) => {
+    if (!date) return 'No deadline';
+    if (typeof date === 'string') return new Date(date).toLocaleDateString();
+    if (typeof date.toDate === 'function') return date.toDate().toLocaleDateString();
+    if (date instanceof Date) return date.toLocaleDateString();
+    return 'No deadline';
   };
 
   const formatPrice = (price: number) => {
