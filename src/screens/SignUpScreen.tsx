@@ -251,7 +251,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           {/* Error Display */}
           {error ? (
             <Text style={styles.errorText} testID="signup.error">
-              {error}
+              {typeof error === 'string' ? error : error?.message || 'An error occurred'}
             </Text>
           ) : null}
 

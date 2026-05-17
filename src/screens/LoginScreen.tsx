@@ -173,7 +173,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           {/* Error Display */}
           {error ? (
             <Text style={styles.errorText} testID="login.error">
-              {error}
+              {typeof error === 'string' ? error : error?.message || 'An error occurred'}
             </Text>
           ) : null}
 
