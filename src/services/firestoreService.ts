@@ -1,5 +1,6 @@
 // src/services/firestoreService.ts
 import { getFirebaseDb } from '../lib/firebase';
+import firestore from '@react-native-firebase/firestore';
 import {
   User,
   Task,
@@ -16,10 +17,9 @@ import {
 } from '../types/firestore';
 
 class FirestoreService {
-  // Helper to convert Firestore timestamps to Date objects
   private convertTimestamps(data: any): any {
     if (!data) return data;
-    
+
     const converted = { ...data };
     Object.keys(converted).forEach(key => {
       if (converted[key] && converted[key].toDate && typeof converted[key].toDate === 'function') {
@@ -33,116 +33,73 @@ class FirestoreService {
 
   // User Management
   async createUser(userData: Omit<User, 'uid' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const userRef = getFirebaseDb().collection(COLLECTIONS.USERS).doc();
-    const user: Omit<User, 'uid'> = {
+    const ref = getFirebaseDb().collection(COLLECTIONS.USERS).doc();
+    await ref.set({
+      uid: ref.id,
       ...userData,
-      uid: userRef.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    await userRef.set({
-      ...user,
-      createdAt: getFirebaseDb().FieldValue.serverTimestamp(),
-      updatedAt: getFirebaseDb().FieldValue.serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
-    
-    return userRef.id;
+    return ref.id;
   }
 
   async getUser(userId: string): Promise<User | null> {
-    const userDoc = await getFirebaseDb().collection(COLLECTIONS.USERS).doc(userId).get();
-    if (!userDoc.exists) return null;
-
-    return this.convertTimestamps({ uid: userDoc.id, ...userDoc.data() }) as User;
+    const doc = await getFirebaseDb().collection(COLLECTIONS.USERS).doc(userId).get();
+    if (!doc.exists) return null;
+    return this.convertTimestamps({ uid: doc.id, ...doc.data() }) as User;
   }
 
   async updateUser(userId: string, updates: Partial<User>): Promise<void> {
-    const userRef = doc(db, COLLECTIONS.USERS, userId);
-    await updateDoc(userRef, {
+    await getFirebaseDb().collection(COLLECTIONS.USERS).doc(userId).update({
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
   }
 
   // Task Management
   async createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const taskRef = doc(collection(db, COLLECTIONS.TASKS));
-    const task: Omit<Task, 'id'> = {
+    const ref = getFirebaseDb().collection(COLLECTIONS.TASKS).doc();
+    await ref.set({
+      id: ref.id,
       ...taskData,
-      id: taskRef.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    await updateDoc(taskRef, {
-      ...task,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      deadline: Timestamp.fromDate(task.deadline),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+      deadline: taskData.deadline ? firestore.Timestamp.fromDate(taskData.deadline) : null,
     });
-    
-    return taskRef.id;
+    return ref.id;
   }
 
   async getTask(taskId: string): Promise<Task | null> {
-    const taskDoc = await getDoc(doc(db, COLLECTIONS.TASKS, taskId));
-    if (!taskDoc.exists()) return null;
-    
-    return this.convertTimestamps({ id: taskDoc.id, ...taskDoc.data() }) as Task;
+    const doc = await getFirebaseDb().collection(COLLECTIONS.TASKS).doc(taskId).get();
+    if (!doc.exists) return null;
+    return this.convertTimestamps({ id: doc.id, ...doc.data() }) as Task;
   }
 
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-    const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
     const updateData: any = {
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     };
-    
     if (updates.deadline) {
-      updateData.deadline = Timestamp.fromDate(updates.deadline);
+      updateData.deadline = firestore.Timestamp.fromDate(updates.deadline);
     }
-    
-    await updateDoc(taskRef, updateData);
+    await getFirebaseDb().collection(COLLECTIONS.TASKS).doc(taskId).update(updateData);
   }
 
   async getTasks(queryParams: TaskQuery = {}): Promise<Task[]> {
-    const constraints: QueryConstraint[] = [];
-    
-    if (queryParams.status) {
-      constraints.push(where('status', '==', queryParams.status));
-    }
-    if (queryParams.createdBy) {
-      constraints.push(where('createdBy', '==', queryParams.createdBy));
-    }
-    if (queryParams.completedBy) {
-      constraints.push(where('completedBy', '==', queryParams.completedBy));
-    }
-    if (queryParams.subject) {
-      constraints.push(where('subject', '==', queryParams.subject));
-    }
-    if (queryParams.minPrice !== undefined) {
-      constraints.push(where('price', '>=', queryParams.minPrice));
-    }
-    if (queryParams.maxPrice !== undefined) {
-      constraints.push(where('price', '<=', queryParams.maxPrice));
-    }
-    if (queryParams.urgency) {
-      constraints.push(where('urgency', '==', queryParams.urgency));
-    }
-    
-    const orderByField = queryParams.orderBy || 'createdAt';
-    const orderDirection = queryParams.orderDirection || 'desc';
-    constraints.push(orderBy(orderByField, orderDirection));
-    
-    if (queryParams.limit) {
-      constraints.push(limit(queryParams.limit));
-    }
-    
-    const q = query(collection(db, COLLECTIONS.TASKS), ...constraints);
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => 
+    let ref: any = getFirebaseDb().collection(COLLECTIONS.TASKS);
+    if (queryParams.status) ref = ref.where('status', '==', queryParams.status);
+    if (queryParams.createdBy) ref = ref.where('createdBy', '==', queryParams.createdBy);
+    if (queryParams.completedBy) ref = ref.where('completedBy', '==', queryParams.completedBy);
+    if (queryParams.subject) ref = ref.where('subject', '==', queryParams.subject);
+    if (queryParams.minPrice !== undefined) ref = ref.where('price', '>=', queryParams.minPrice);
+    if (queryParams.maxPrice !== undefined) ref = ref.where('price', '<=', queryParams.maxPrice);
+    if (queryParams.urgency) ref = ref.where('urgency', '==', queryParams.urgency);
+    ref = ref.orderBy(queryParams.orderBy || 'createdAt', queryParams.orderDirection || 'desc');
+    if (queryParams.limit) ref = ref.limit(queryParams.limit);
+    const snapshot = await ref.get();
+    if (!snapshot?.docs) return [];
+    return snapshot.docs.map((doc: any) =>
       this.convertTimestamps({ id: doc.id, ...doc.data() }) as Task
     );
   }
@@ -153,96 +110,59 @@ class FirestoreService {
     callback: (tasks: Task[]) => void
   ): () => void {
     let ref: any = getFirebaseDb().collection(COLLECTIONS.TASKS);
-
-    if (queryParams.status) {
-      ref = ref.where('status', '==', queryParams.status);
-    }
-    if (queryParams.createdBy) {
-      ref = ref.where('createdBy', '==', queryParams.createdBy);
-    }
-    if (queryParams.completedBy) {
-      ref = ref.where('completedBy', '==', queryParams.completedBy);
-    }
-    if (queryParams.subject) {
-      ref = ref.where('subject', '==', queryParams.subject);
-    }
-    if (queryParams.minPrice !== undefined) {
-      ref = ref.where('price', '>=', queryParams.minPrice);
-    }
-    if (queryParams.maxPrice !== undefined) {
-      ref = ref.where('price', '<=', queryParams.maxPrice);
-    }
-    if (queryParams.urgency) {
-      ref = ref.where('urgency', '==', queryParams.urgency);
-    }
-
-    const orderByField = queryParams.orderBy || 'createdAt';
-    const orderDirection = queryParams.orderDirection || 'desc';
-    ref = ref.orderBy(orderByField, orderDirection);
-
-    if (queryParams.limit) {
-      ref = ref.limit(queryParams.limit);
-    }
-
-    return ref.onSnapshot((snapshot: any) => {
-      const tasks = snapshot.docs.map((doc: any) =>
-        this.convertTimestamps({ id: doc.id, ...doc.data() }) as Task
-      );
-      callback(tasks);
-    });
+    if (queryParams.status) ref = ref.where('status', '==', queryParams.status);
+    if (queryParams.createdBy) ref = ref.where('createdBy', '==', queryParams.createdBy);
+    if (queryParams.completedBy) ref = ref.where('completedBy', '==', queryParams.completedBy);
+    if (queryParams.subject) ref = ref.where('subject', '==', queryParams.subject);
+    if (queryParams.minPrice !== undefined) ref = ref.where('price', '>=', queryParams.minPrice);
+    if (queryParams.maxPrice !== undefined) ref = ref.where('price', '<=', queryParams.maxPrice);
+    if (queryParams.urgency) ref = ref.where('urgency', '==', queryParams.urgency);
+    ref = ref.orderBy(queryParams.orderBy || 'createdAt', queryParams.orderDirection || 'desc');
+    if (queryParams.limit) ref = ref.limit(queryParams.limit);
+    return ref.onSnapshot(
+      (snapshot: any) => {
+        const tasks = snapshot?.docs?.map((doc: any) =>
+          this.convertTimestamps({ id: doc.id, ...doc.data() }) as Task
+        ) ?? [];
+        callback(tasks);
+      },
+      (error: any) => {
+        console.error('subscribeToTasks error:', error);
+        callback([]);
+      }
+    );
   }
 
   // Chat Management
   async createChat(chatData: Omit<Chat, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const chatRef = doc(collection(db, COLLECTIONS.CHATS));
-    const chat: Omit<Chat, 'id'> = {
+    const ref = getFirebaseDb().collection(COLLECTIONS.CHATS).doc();
+    await ref.set({
+      id: ref.id,
       ...chatData,
-      id: chatRef.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    await updateDoc(chatRef, {
-      ...chat,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
-    
-    return chatRef.id;
+    return ref.id;
   }
 
   async getChat(chatId: string): Promise<Chat | null> {
-    const chatDoc = await getDoc(doc(db, COLLECTIONS.CHATS, chatId));
-    if (!chatDoc.exists()) return null;
-    
-    return this.convertTimestamps({ id: chatDoc.id, ...chatDoc.data() }) as Chat;
+    const doc = await getFirebaseDb().collection(COLLECTIONS.CHATS).doc(chatId).get();
+    if (!doc.exists) return null;
+    return this.convertTimestamps({ id: doc.id, ...doc.data() }) as Chat;
   }
 
   async getChats(queryParams: ChatQuery = {}): Promise<Chat[]> {
-    const constraints: QueryConstraint[] = [];
-    
+    let ref: any = getFirebaseDb().collection(COLLECTIONS.CHATS);
     if (queryParams.participants) {
-      constraints.push(where('participants', 'array-contains-any', queryParams.participants));
+      ref = ref.where('participants', 'array-contains-any', queryParams.participants);
     }
-    if (queryParams.taskId) {
-      constraints.push(where('taskId', '==', queryParams.taskId));
-    }
-    if (queryParams.isActive !== undefined) {
-      constraints.push(where('isActive', '==', queryParams.isActive));
-    }
-    
-    const orderByField = queryParams.orderBy || 'updatedAt';
-    const orderDirection = queryParams.orderDirection || 'desc';
-    constraints.push(orderBy(orderByField, orderDirection));
-    
-    if (queryParams.limit) {
-      constraints.push(limit(queryParams.limit));
-    }
-    
-    const q = query(collection(db, COLLECTIONS.CHATS), ...constraints);
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => 
+    if (queryParams.taskId) ref = ref.where('taskId', '==', queryParams.taskId);
+    if (queryParams.isActive !== undefined) ref = ref.where('isActive', '==', queryParams.isActive);
+    ref = ref.orderBy(queryParams.orderBy || 'updatedAt', queryParams.orderDirection || 'desc');
+    if (queryParams.limit) ref = ref.limit(queryParams.limit);
+    const snapshot = await ref.get();
+    if (!snapshot?.docs) return [];
+    return snapshot.docs.map((doc: any) =>
       this.convertTimestamps({ id: doc.id, ...doc.data() }) as Chat
     );
   }
@@ -251,243 +171,208 @@ class FirestoreService {
   subscribeToChats(
     queryParams: ChatQuery = {},
     callback: (chats: Chat[]) => void
-  ): Unsubscribe {
-    const constraints: QueryConstraint[] = [];
-    
+  ): () => void {
+    let ref: any = getFirebaseDb().collection(COLLECTIONS.CHATS);
     if (queryParams.participants) {
-      constraints.push(where('participants', 'array-contains-any', queryParams.participants));
+      ref = ref.where('participants', 'array-contains-any', queryParams.participants);
     }
-    if (queryParams.taskId) {
-      constraints.push(where('taskId', '==', queryParams.taskId));
-    }
-    if (queryParams.isActive !== undefined) {
-      constraints.push(where('isActive', '==', queryParams.isActive));
-    }
-    
-    const orderByField = queryParams.orderBy || 'updatedAt';
-    const orderDirection = queryParams.orderDirection || 'desc';
-    constraints.push(orderBy(orderByField, orderDirection));
-    
-    if (queryParams.limit) {
-      constraints.push(limit(queryParams.limit));
-    }
-    
-    const q = query(collection(db, COLLECTIONS.CHATS), ...constraints);
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const chats = querySnapshot.docs.map(doc => 
-        this.convertTimestamps({ id: doc.id, ...doc.data() }) as Chat
-      );
-      callback(chats);
-    });
+    if (queryParams.taskId) ref = ref.where('taskId', '==', queryParams.taskId);
+    if (queryParams.isActive !== undefined) ref = ref.where('isActive', '==', queryParams.isActive);
+    ref = ref.orderBy(queryParams.orderBy || 'updatedAt', queryParams.orderDirection || 'desc');
+    if (queryParams.limit) ref = ref.limit(queryParams.limit);
+    return ref.onSnapshot(
+      (snapshot: any) => {
+        const chats = snapshot?.docs?.map((doc: any) =>
+          this.convertTimestamps({ id: doc.id, ...doc.data() }) as Chat
+        ) ?? [];
+        callback(chats);
+      },
+      (error: any) => {
+        console.error('subscribeToChats error:', error);
+        callback([]);
+      }
+    );
   }
 
   // Message Management
   async sendMessage(messageData: Omit<Message, 'id' | 'timestamp'>): Promise<string> {
-    const messageRef = doc(collection(db, COLLECTIONS.CHATS, messageData.chatId, COLLECTIONS.MESSAGES));
-    const message: Omit<Message, 'id'> = {
+    const msgRef = getFirebaseDb()
+      .collection(COLLECTIONS.CHATS)
+      .doc(messageData.chatId)
+      .collection(COLLECTIONS.MESSAGES)
+      .doc();
+    await msgRef.set({
+      id: msgRef.id,
       ...messageData,
-      id: messageRef.id,
-      timestamp: new Date(),
-    };
-    
-    await updateDoc(messageRef, {
-      ...message,
-      timestamp: serverTimestamp(),
+      timestamp: firestore.FieldValue.serverTimestamp(),
     });
-    
-    // Update chat's last message and timestamp
-    await updateDoc(doc(db, COLLECTIONS.CHATS, messageData.chatId), {
-      lastMessage: {
-        text: messageData.text,
-        senderId: messageData.senderId,
-        senderName: messageData.senderName,
-        timestamp: serverTimestamp(),
-      },
-      updatedAt: serverTimestamp(),
-    });
-    
-    return messageRef.id;
+    await getFirebaseDb()
+      .collection(COLLECTIONS.CHATS)
+      .doc(messageData.chatId)
+      .update({
+        lastMessage: {
+          text: messageData.text,
+          senderId: messageData.senderId,
+          senderName: messageData.senderName,
+          timestamp: firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+    return msgRef.id;
   }
 
   // Real-time message updates
   subscribeToMessages(
     chatId: string,
     callback: (messages: Message[]) => void
-  ): Unsubscribe {
-    const q = query(
-      collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES),
-      orderBy('timestamp', 'asc')
-    );
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const messages = querySnapshot.docs.map(doc => 
-        this.convertTimestamps({ id: doc.id, ...doc.data() }) as Message
+  ): () => void {
+    return getFirebaseDb()
+      .collection(COLLECTIONS.CHATS)
+      .doc(chatId)
+      .collection(COLLECTIONS.MESSAGES)
+      .orderBy('timestamp', 'asc')
+      .onSnapshot(
+        (snapshot: any) => {
+          const messages = snapshot?.docs?.map((doc: any) =>
+            this.convertTimestamps({ id: doc.id, ...doc.data() }) as Message
+          ) ?? [];
+          callback(messages);
+        },
+        (error: any) => {
+          console.error('subscribeToMessages error:', error);
+          callback([]);
+        }
       );
-      callback(messages);
-    });
   }
 
   // Notification Management
   async createNotification(notificationData: Omit<Notification, 'id' | 'createdAt'>): Promise<string> {
-    const notificationRef = doc(collection(db, COLLECTIONS.NOTIFICATIONS));
-    const notification: Omit<Notification, 'id'> = {
+    const ref = getFirebaseDb().collection(COLLECTIONS.NOTIFICATIONS).doc();
+    await ref.set({
+      id: ref.id,
       ...notificationData,
-      id: notificationRef.id,
-      createdAt: new Date(),
-    };
-    
-    await updateDoc(notificationRef, {
-      ...notification,
-      createdAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
     });
-    
-    return notificationRef.id;
+    return ref.id;
   }
 
   async getNotifications(queryParams: NotificationQuery): Promise<Notification[]> {
-    const constraints: QueryConstraint[] = [
-      where('userId', '==', queryParams.userId),
-    ];
-    
-    if (queryParams.isRead !== undefined) {
-      constraints.push(where('isRead', '==', queryParams.isRead));
-    }
-    if (queryParams.type) {
-      constraints.push(where('type', '==', queryParams.type));
-    }
-    
-    const orderByField = queryParams.orderBy || 'createdAt';
-    const orderDirection = queryParams.orderDirection || 'desc';
-    constraints.push(orderBy(orderByField, orderDirection));
-    
-    if (queryParams.limit) {
-      constraints.push(limit(queryParams.limit));
-    }
-    
-    const q = query(collection(db, COLLECTIONS.NOTIFICATIONS), ...constraints);
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => 
+    let ref: any = getFirebaseDb()
+      .collection(COLLECTIONS.NOTIFICATIONS)
+      .where('userId', '==', queryParams.userId);
+    if (queryParams.isRead !== undefined) ref = ref.where('isRead', '==', queryParams.isRead);
+    if (queryParams.type) ref = ref.where('type', '==', queryParams.type);
+    ref = ref.orderBy(queryParams.orderBy || 'createdAt', queryParams.orderDirection || 'desc');
+    if (queryParams.limit) ref = ref.limit(queryParams.limit);
+    const snapshot = await ref.get();
+    if (!snapshot?.docs) return [];
+    return snapshot.docs.map((doc: any) =>
       this.convertTimestamps({ id: doc.id, ...doc.data() }) as Notification
     );
   }
 
   async markNotificationAsRead(notificationId: string): Promise<void> {
-    const notificationRef = doc(db, COLLECTIONS.NOTIFICATIONS, notificationId);
-    await updateDoc(notificationRef, { isRead: true });
+    await getFirebaseDb()
+      .collection(COLLECTIONS.NOTIFICATIONS)
+      .doc(notificationId)
+      .update({ isRead: true });
   }
 
   // Real-time notification updates
   subscribeToNotifications(
     userId: string,
     callback: (notifications: Notification[]) => void
-  ): Unsubscribe {
-    const q = query(
-      collection(db, COLLECTIONS.NOTIFICATIONS),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    );
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const notifications = querySnapshot.docs.map(doc => 
-        this.convertTimestamps({ id: doc.id, ...doc.data() }) as Notification
+  ): () => void {
+    return getFirebaseDb()
+      .collection(COLLECTIONS.NOTIFICATIONS)
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .onSnapshot(
+        (snapshot: any) => {
+          const notifications = snapshot?.docs?.map((doc: any) =>
+            this.convertTimestamps({ id: doc.id, ...doc.data() }) as Notification
+          ) ?? [];
+          callback(notifications);
+        },
+        (error: any) => {
+          console.error('subscribeToNotifications error:', error);
+          callback([]);
+        }
       );
-      callback(notifications);
-    });
   }
 
   // Wallet Management
   async getWallet(userId: string): Promise<Wallet | null> {
-    const walletDoc = await getDoc(doc(db, COLLECTIONS.WALLETS, userId));
-    if (!walletDoc.exists()) return null;
-    
-    return this.convertTimestamps({ userId, ...walletDoc.data() }) as Wallet;
+    const doc = await getFirebaseDb().collection(COLLECTIONS.WALLETS).doc(userId).get();
+    if (!doc.exists) return null;
+    return this.convertTimestamps({ userId, ...doc.data() }) as Wallet;
   }
 
   async updateWallet(userId: string, updates: Partial<Wallet>): Promise<void> {
-    const walletRef = doc(db, COLLECTIONS.WALLETS, userId);
-    await updateDoc(walletRef, {
+    await getFirebaseDb().collection(COLLECTIONS.WALLETS).doc(userId).update({
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
   }
 
   async createTransaction(transactionData: Omit<Transaction, 'id' | 'createdAt'>): Promise<string> {
-    const transactionRef = doc(collection(db, COLLECTIONS.TRANSACTIONS));
-    const transaction: Omit<Transaction, 'id'> = {
+    const ref = getFirebaseDb().collection(COLLECTIONS.TRANSACTIONS).doc();
+    await ref.set({
+      id: ref.id,
       ...transactionData,
-      id: transactionRef.id,
-      createdAt: new Date(),
-    };
-    
-    await updateDoc(transactionRef, {
-      ...transaction,
-      createdAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
     });
-    
-    return transactionRef.id;
+    return ref.id;
   }
 
   async getTransactions(userId: string, limitCount: number = 50): Promise<Transaction[]> {
-    const q = query(
-      collection(db, COLLECTIONS.TRANSACTIONS),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc'),
-      limit(limitCount)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => 
+    const snapshot = await getFirebaseDb()
+      .collection(COLLECTIONS.TRANSACTIONS)
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(limitCount)
+      .get();
+    if (!snapshot?.docs) return [];
+    return snapshot.docs.map((doc: any) =>
       this.convertTimestamps({ id: doc.id, ...doc.data() }) as Transaction
     );
   }
 
   // AI Chat Session Management
   async createAISession(sessionData: Omit<AIChatSession, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const sessionRef = doc(collection(db, COLLECTIONS.AI_SESSIONS));
-    const session: Omit<AIChatSession, 'id'> = {
+    const ref = getFirebaseDb().collection(COLLECTIONS.AI_SESSIONS).doc();
+    await ref.set({
+      id: ref.id,
       ...sessionData,
-      id: sessionRef.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    await updateDoc(sessionRef, {
-      ...session,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
-    
-    return sessionRef.id;
+    return ref.id;
   }
 
   async getAISession(sessionId: string): Promise<AIChatSession | null> {
-    const sessionDoc = await getDoc(doc(db, COLLECTIONS.AI_SESSIONS, sessionId));
-    if (!sessionDoc.exists()) return null;
-    
-    return this.convertTimestamps({ id: sessionDoc.id, ...sessionDoc.data() }) as AIChatSession;
+    const doc = await getFirebaseDb().collection(COLLECTIONS.AI_SESSIONS).doc(sessionId).get();
+    if (!doc.exists) return null;
+    return this.convertTimestamps({ id: doc.id, ...doc.data() }) as AIChatSession;
   }
 
   async updateAISession(sessionId: string, updates: Partial<AIChatSession>): Promise<void> {
-    const sessionRef = doc(db, COLLECTIONS.AI_SESSIONS, sessionId);
-    await updateDoc(sessionRef, {
+    await getFirebaseDb().collection(COLLECTIONS.AI_SESSIONS).doc(sessionId).update({
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
   }
 
   async getAISessions(userId: string, limitCount: number = 20): Promise<AIChatSession[]> {
-    const q = query(
-      collection(db, COLLECTIONS.AI_SESSIONS),
-      where('userId', '==', userId),
-      orderBy('updatedAt', 'desc'),
-      limit(limitCount)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => 
+    const snapshot = await getFirebaseDb()
+      .collection(COLLECTIONS.AI_SESSIONS)
+      .where('userId', '==', userId)
+      .orderBy('updatedAt', 'desc')
+      .limit(limitCount)
+      .get();
+    if (!snapshot?.docs) return [];
+    return snapshot.docs.map((doc: any) =>
       this.convertTimestamps({ id: doc.id, ...doc.data() }) as AIChatSession
     );
   }
