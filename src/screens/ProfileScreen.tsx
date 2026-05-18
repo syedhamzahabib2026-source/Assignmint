@@ -313,7 +313,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       <View style={styles.badgesSection}>
         <Text style={styles.sectionTitle}>Badges & Achievements</Text>
         <View style={styles.badgesContainer}>
-          {(userData?.badges ?? []).map((badge, index) => (
+          {(Array.isArray(userData?.badges) ? userData.badges : []).map((badge, index) => (
             <View key={index} style={styles.badgeItem}>
               <Icon name={Icons.star} size={16} color="#FFD700" />
               <Text style={styles.badgeText}>{badge}</Text>
