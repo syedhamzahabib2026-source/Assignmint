@@ -47,10 +47,15 @@ export const signUpEmail = async (
   
   // Create Firestore profile
   await db().collection('users').doc(user.uid).set({
+    uid: user.uid,
     displayName,
     email,
     photoURL: user.photoURL ?? null,
     role: 'user',
+    trustScore: 0,
+    rating: 0,
+    completedTasks: 0,
+    badges: [],
     stripeCustomerId: null,
     createdAt: firestore.FieldValue.serverTimestamp(),
     updatedAt: firestore.FieldValue.serverTimestamp(),
@@ -85,10 +90,15 @@ export const createUserDocument = async (user: FirebaseAuthTypes.User, additiona
   const userRef = db().collection('users').doc(user.uid);
   
   const userData = {
+    uid: user.uid,
     displayName: user.displayName || '',
     email: user.email || '',
     photoURL: user.photoURL || null,
     role: 'user',
+    trustScore: 0,
+    rating: 0,
+    completedTasks: 0,
+    badges: [],
     stripeCustomerId: null,
     createdAt: firestore.FieldValue.serverTimestamp(),
     updatedAt: firestore.FieldValue.serverTimestamp(),
