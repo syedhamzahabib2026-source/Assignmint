@@ -47,6 +47,9 @@ const StepFive: React.FC<StepFiveProps> = ({ navigation, route }) => {
   // Calculate AI level as average of range
   const aiLevel = Math.round((aiRangeMin + aiRangeMax) / 2);
 
+  // Normalize budget to a number — route.params may pass it as a string or undefined
+  const budgetNum = parseFloat(String(budget)) || 0;
+
   const paymentMethods = [
     { id: 'visa_1234', label: 'Visa ****1234', icon: '💳', type: 'Visa' },
     { id: 'mastercard_5678', label: 'Mastercard ****5678', icon: '💳', type: 'Mastercard' },
@@ -304,12 +307,12 @@ const StepFive: React.FC<StepFiveProps> = ({ navigation, route }) => {
           </View>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Service Fee:</Text>
-            <Text style={styles.totalValue}>${(budget * 0.10).toFixed(2)}</Text>
+            <Text style={styles.totalValue}>${(budgetNum * 0.10).toFixed(2)}</Text>
           </View>
           <View style={styles.totalDivider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabelBold}>Total:</Text>
-            <Text style={styles.totalValueBold}>${(budget * 1.10).toFixed(2)}</Text>
+            <Text style={styles.totalValueBold}>${(budgetNum * 1.10).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -344,7 +347,7 @@ const StepFive: React.FC<StepFiveProps> = ({ navigation, route }) => {
             <ActivityIndicator color={COLORS.white} />
           ) : (
             <Text style={[styles.postButtonText, (!agreedToTerms || isCreatingTask) && styles.postButtonTextDisabled]}>
-              Confirm & Post Task (${(parseFloat(budget) * 1.10).toFixed(2)})
+              Confirm & Post Task (${(budgetNum * 1.10).toFixed(2)})
             </Text>
           )}
         </TouchableOpacity>

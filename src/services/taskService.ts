@@ -1,5 +1,6 @@
 // src/services/taskService.ts - Task management with React Native Firebase
-import { db } from '../lib/firebase';
+import { getFirebaseDb } from '../lib/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { Task } from '../types';
 
 export interface CreateTaskData {
@@ -11,8 +12,8 @@ export interface CreateTaskData {
   deadlineTime?: string;
   urgency: 'low' | 'medium' | 'high';
   matchingPreference: 'auto' | 'manual';
-  autoMatch?: boolean; // New field for auto-matching
-  matchingType?: 'manual' | 'auto'; // New field for matching type
+  autoMatch?: boolean;
+  matchingType?: 'manual' | 'auto';
   isForStudent?: boolean;
   ownerId: string;
   ownerName: string;
@@ -31,26 +32,21 @@ export interface CreateTaskResult {
 }
 
 class TaskService {
-  private tasksCollection = collection(db, 'tasks');
-
-  /**
-   * Create a new task in Firestore
-   */
   async createTask(taskData: CreateTaskData): Promise<CreateTaskResult> {
     try {
-      console.log('🔥 Creating task with Web SDK:', taskData);
+      console.log('🔥 Creating task:', taskData);
 
-      // Convert deadline to ISO string if needed
       let deadlineISO = taskData.deadline;
       if (taskData.deadlineTime) {
-        const deadlineDate = new Date(`${taskData.deadline} ${taskData.deadlineTime}`);
-        deadlineISO = deadlineDate.toISOString();
+        deadlineISO = new Date(`${taskData.deadline} ${taskData.deadlineTime}`).toISOString();
       } else {
-        const deadlineDate = new Date(taskData.deadline);
-        deadlineISO = deadlineDate.toISOString();
+        deadlineISO = new Date(taskData.deadline).toISOString();
       }
 
-      const task: Omit<Task, 'taskId'> = {
+      const ref = getFirebaseDb().collection('tasks').doc();
+
+      await ref.set({
+        taskId: ref.id,
         title: taskData.title,
         subject: taskData.subject,
         description: taskData.description || '',
@@ -61,10 +57,9 @@ class TaskService {
         ownerId: taskData.ownerId,
         ownerName: taskData.ownerName,
         ownerEmail: taskData.ownerEmail,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        
-        // Matching system fields
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+
         matchingPreference: taskData.matchingPreference,
         matchingType: taskData.matchingType || taskData.matchingPreference,
         autoMatch: taskData.autoMatch || (taskData.matchingPreference === 'auto'),
@@ -80,61 +75,46 @@ class TaskService {
           invitedNow: 0,
         },
 
-        // AI and other features
         aiLevel: taskData.aiLevel || 50,
         aiTaskExplainer: taskData.aiTaskExplainer || false,
         summaryOnDelivery: taskData.summaryOnDelivery || false,
         uploadedFiles: taskData.uploadedFiles || [],
         selectedTemplate: taskData.selectedTemplate || '',
 
-        // Visibility and search
         isActive: true,
         isForStudent: taskData.isForStudent || false,
         tags: this.generateTags(taskData.title, taskData.description || '', taskData.subject),
-      };
-
-      // Create task document
-      const docRef = await addDoc(this.tasksCollection, {
-        ...task,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
 
-      console.log('✅ Task created with ID:', docRef.id);
+      console.log('✅ Task created with ID:', ref.id);
 
       return {
         success: true,
-        taskId: docRef.id,
-        message: taskData.matchingPreference === 'manual' 
-          ? 'Task posted to expert marketplace!' 
-          : 'Task created and queued for auto-assignment!'
+        taskId: ref.id,
+        message: taskData.matchingPreference === 'manual'
+          ? 'Task posted to expert marketplace!'
+          : 'Task created and queued for auto-assignment!',
       };
     } catch (error) {
       console.error('❌ Error creating task:', error);
       return {
         success: false,
-        message: `Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
 
-  /**
-   * Get a task by ID
-   */
   async getTaskById(taskId: string): Promise<Task | null> {
     try {
-      const taskDoc = await getDoc(doc(db, 'tasks', taskId));
-      
-      if (!taskDoc.exists()) {
-        return null;
-      }
+      const doc = await getFirebaseDb().collection('tasks').doc(taskId).get();
+      if (!doc.exists) return null;
 
-      const data = taskDoc.data();
+      const data = doc.data() as any;
       return {
-        taskId: taskDoc.id,
+        taskId: doc.id,
         ...data,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+        createdAt: data.createdAt instanceof firestore.Timestamp ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt instanceof firestore.Timestamp ? data.updatedAt.toDate() : data.updatedAt,
       } as Task;
     } catch (error) {
       console.error('❌ Error getting task:', error);
@@ -142,84 +122,68 @@ class TaskService {
     }
   }
 
-  /**
-   * Get tasks for home feed (real-time)
-   */
   getOpenTasks(callback: (tasks: Task[]) => void): () => void {
-    const q = query(
-      this.tasksCollection,
-      where('status', '==', 'open'),
-      where('isActive', '==', true),
-      orderBy('createdAt', 'desc'),
-      limit(20)
-    );
-
-    return onSnapshot(q, (snapshot) => {
-      const tasks: Task[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        tasks.push({
-          taskId: doc.id,
-          ...data,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
-        } as Task);
-      });
-      
-      console.log(`📡 Real-time feed update: ${tasks.length} open tasks`);
-      callback(tasks);
-    }, (error) => {
-      console.error('❌ Error listening to tasks:', error);
-      callback([]);
-    });
+    return getFirebaseDb()
+      .collection('tasks')
+      .where('status', '==', 'open')
+      .where('isActive', '==', true)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .onSnapshot(
+        (snapshot: any) => {
+          const tasks: Task[] = (snapshot?.docs ?? []).map((doc: any) => {
+            const data = doc.data();
+            return {
+              taskId: doc.id,
+              ...data,
+              createdAt: data.createdAt instanceof firestore.Timestamp ? data.createdAt.toDate() : data.createdAt,
+              updatedAt: data.updatedAt instanceof firestore.Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+            } as Task;
+          });
+          console.log(`📡 Real-time feed update: ${tasks.length} open tasks`);
+          callback(tasks);
+        },
+        (error: any) => {
+          console.error('❌ Error listening to tasks:', error);
+          callback([]);
+        }
+      );
   }
 
-  /**
-   * Get tasks by owner (real-time)
-   */
   getUserTasks(ownerId: string, callback: (tasks: Task[]) => void): () => void {
-    const q = query(
-      this.tasksCollection,
-      where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    );
-
-    return onSnapshot(q, (snapshot) => {
-      const tasks: Task[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        tasks.push({
-          taskId: doc.id,
-          ...data,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
-        } as Task);
-      });
-      
-      console.log(`📡 Real-time user tasks update: ${tasks.length} tasks for ${ownerId}`);
-      callback(tasks);
-    }, (error) => {
-      console.error('❌ Error listening to user tasks:', error);
-      callback([]);
-    });
+    return getFirebaseDb()
+      .collection('tasks')
+      .where('ownerId', '==', ownerId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .onSnapshot(
+        (snapshot: any) => {
+          const tasks: Task[] = (snapshot?.docs ?? []).map((doc: any) => {
+            const data = doc.data();
+            return {
+              taskId: doc.id,
+              ...data,
+              createdAt: data.createdAt instanceof firestore.Timestamp ? data.createdAt.toDate() : data.createdAt,
+              updatedAt: data.updatedAt instanceof firestore.Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+            } as Task;
+          });
+          console.log(`📡 Real-time user tasks update: ${tasks.length} tasks for ${ownerId}`);
+          callback(tasks);
+        },
+        (error: any) => {
+          console.error('❌ Error listening to user tasks:', error);
+          callback([]);
+        }
+      );
   }
 
-  /**
-   * Generate search tags from task content
-   */
   private generateTags(title: string, description: string, subject: string): string[] {
     const text = `${title} ${description} ${subject}`.toLowerCase();
     const words = text.split(/\s+/).filter(word => word.length > 2);
-    
-    // Remove duplicates and common words
     const commonWords = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'];
     const tags = [...new Set(words.filter(word => !commonWords.includes(word)))];
-    
-    // Add subject as a tag
     tags.push(subject.toLowerCase());
-    
-    return tags.slice(0, 10); // Limit to 10 tags
+    return tags.slice(0, 10);
   }
 }
 
