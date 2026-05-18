@@ -38,17 +38,18 @@ export const signUpEmail = async (
   const userCredential = await auth().createUserWithEmailAndPassword(email, password);
   const user = userCredential.user;
   
-  // Update profile with display name
-  await user.updateProfile({ displayName });
-  
+  // Update profile with display name (fall back to email if no name provided)
+  const effectiveDisplayName = displayName || email;
+  await user.updateProfile({ displayName: effectiveDisplayName });
+
   // Send email verification
   await user.sendEmailVerification();
   console.log('✅ Verification email sent to:', email);
-  
+
   // Create Firestore profile
   await db().collection('users').doc(user.uid).set({
     uid: user.uid,
-    displayName,
+    displayName: effectiveDisplayName,
     email,
     photoURL: user.photoURL ?? null,
     role: 'user',

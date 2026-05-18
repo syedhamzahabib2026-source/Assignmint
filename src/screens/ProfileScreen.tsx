@@ -487,7 +487,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <Icon name={Icons.user} size={24} color="#8E8E93" />
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.userName}>{userData?.name || 'Loading...'}</Text>
+            <Text style={styles.userName}>{userData?.displayName || userData?.email || 'User'}</Text>
             <Text style={styles.userTitle}>{userData?.title || 'User'}</Text>
             <View style={styles.trustScoreContainer}>
               <Text style={styles.trustScoreLabel}>Trust Score:</Text>
