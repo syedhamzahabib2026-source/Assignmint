@@ -18,7 +18,7 @@ service cloud.firestore {
       return userData.keys().hasAll(['email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
              userData.email is string &&
              userData.displayName is string &&
-             userData.role in ['requester', 'expert', 'both'];
+             userData.role in ['requester', 'expert', 'both', 'user'];
     }
     
     function isValidTask(taskData) {
@@ -44,10 +44,10 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(resource.data);
-      allow update: if isOwner(userId) && 
-                      isValidUser(resource.data) &&
-                      resource.data.uid == userId;
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) &&
+                      isValidUser(request.resource.data) &&
+                      (!('uid' in request.resource.data) || request.resource.data.uid == userId);
       allow delete: if isOwner(userId);
     }
 
@@ -55,8 +55,8 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && 
-                      isValidTask(resource.data) &&
-                      resource.data.createdBy == request.auth.uid;
+                      isValidTask(request.resource.data) &&
+                      request.resource.data.createdBy == request.auth.uid;
       allow update: if isAuthenticated() && (
         // Task creator can update their own tasks
         resource.data.createdBy == request.auth.uid ||
@@ -69,8 +69,10 @@ service cloud.firestore {
 
     // Chats collection
     match /chats/{chatId} {
-      allow read, create, update: if isAuthenticated() && 
-                                    isParticipant(resource.data.participants);
+      allow read, update: if isAuthenticated() &&
+                            isParticipant(resource.data.participants);
+      allow create: if isAuthenticated() &&
+                      isParticipant(request.resource.data.participants);
       allow delete: if false; // Chats should not be deleted
       
       // Messages subcollection
@@ -78,8 +80,8 @@ service cloud.firestore {
         allow read: if isAuthenticated() && 
                       isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
         allow create: if isAuthenticated() && 
-                        isValidMessage(resource.data) &&
-                        resource.data.senderId == request.auth.uid &&
+                        isValidMessage(request.resource.data) &&
+                        request.resource.data.senderId == request.auth.uid &&
                         isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
         allow update: if isAuthenticated() && 
                         resource.data.senderId == request.auth.uid &&
@@ -93,7 +95,7 @@ service cloud.firestore {
       allow read, update: if isAuthenticated() && 
                             resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && 
-                      resource.data.userId == request.auth.uid;
+                      request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && 
                       resource.data.userId == request.auth.uid;
     }
@@ -107,8 +109,10 @@ service cloud.firestore {
 
     // Transactions collection
     match /transactions/{transactionId} {
-      allow read, create: if isAuthenticated() && 
-                            resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+                    resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                      request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && 
                       resource.data.userId == request.auth.uid &&
                       request.resource.data.keys().hasOnly(['status', 'completedAt', 'metadata']);
@@ -117,8 +121,10 @@ service cloud.firestore {
 
     // AI Sessions collection
     match /aiSessions/{sessionId} {
-      allow read, create, update, delete: if isAuthenticated() && 
-                                            resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAuthenticated() &&
+                                    resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                      request.resource.data.userId == request.auth.uid;
     }
 
     // Admin functions (for Cloud Functions)

@@ -1,0 +1,275 @@
+platform :ios, '16.0'
+
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+
+use_modular_headers!
+
+target 'Assignmint' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true,
+    :fabric_enabled => false,
+    :new_arch_enabled => false
+  )
+
+  # React Native Firebase - Start with just Auth
+  pod 'RNFBApp', :path => '../node_modules/@react-native-firebase/app'
+  pod 'RNFBAuth', :path => '../node_modules/@react-native-firebase/auth'
+  # Temporarily disable Firestore and Messaging due to pod issues
+  # pod 'RNFBFirestore', :path => '../node_modules/@react-native-firebase/firestore'
+  # pod 'RNFBMessaging', :path => '../node_modules/@react-native-firebase/messaging'
+  # pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage'
+  
+  # Stripe React Native
+  pod 'stripe-react-native', :path => '../node_modules/@stripe/stripe-react-native'
+  
+  # Google Sign-In - Temporarily disabled due to dependency conflicts
+  pod 'GoogleSignIn'
+  # pod 'GoogleUtilities'
+  
+  # Temporarily disable Flipper to reduce header/link issues
+  # use_flipper!()
+
+  post_install do |installer|
+    react_native_post_install(installer)
+    # Apply simulator arch + deployment target to app project (not only Pods)
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.native_targets.each do |target|
+        target.build_configurations.each do |cfg|
+          cfg.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+          cfg.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+        end
+      end
+      aggregate_target.user_project.build_configurations.each do |cfg|
+        cfg.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+        cfg.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+      end
+      aggregate_target.user_project.save
+    end
+
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |cfg|
+        cfg.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+        cfg.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+
+        # Basic build settings for all targets
+        cfg.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        
+        # Yoga: newer Xcode treats literal-operator spacing as errors (-Werror in pod)
+        if t.name == 'Yoga'
+          cfg.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+          cfg.build_settings['OTHER_CPLUSPLUSFLAGS'] = '$(inherited) -Wno-deprecated-literal-operator'
+        end
+
+        # Fix RCT-Folly compilation issues with newer Xcode versions
+        if t.name == 'RCT-Folly'
+          cfg.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+          cfg.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+          cfg.build_settings['GCC_C_LANGUAGE_STANDARD'] = 'c11'
+          cfg.build_settings['WARNING_CFLAGS'] = '-w'
+          cfg.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+          cfg.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+          cfg.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+          cfg.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
+          cfg.build_settings['GCC_WARN_ABOUT_MISSING_FIELD_INITIALIZERS'] = 'NO'
+          cfg.build_settings['GCC_WARN_ABOUT_MISSING_PROTOTYPES'] = 'NO'
+          cfg.build_settings['GCC_WARN_ABOUT_RETURN_TYPE'] = 'NO'
+          cfg.build_settings['GCC_WARN_CHECK_SWITCH_STATEMENTS'] = 'NO'
+          cfg.build_settings['GCC_WARN_UNINITIALIZED_AUTOS'] = 'NO'
+          cfg.build_settings['GCC_WARN_UNUSED_FUNCTION'] = 'NO'
+          cfg.build_settings['GCC_WARN_UNUSED_VARIABLE'] = 'NO'
+          cfg.build_settings['CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS'] = 'NO'
+          cfg.build_settings['CLANG_WARN_DIRECT_OBJC_ISA_USAGE'] = 'NO'
+          cfg.build_settings['CLANG_WARN_OBJC_ROOT_CLASS'] = 'NO'
+        end
+      end
+    end
+    
+    # Fix RCT-Folly clockid_t redefinition issue on Apple platforms
+    folly_header_path = File.join(installer.sandbox.root, 'RCT-Folly', 'folly', 'portability', 'Time.h')
+    headers_private_path = File.join(installer.sandbox.root, 'Headers', 'Private', 'RCT-Folly', 'folly', 'portability', 'Time.h')
+    
+    [folly_header_path, headers_private_path].each do |path|
+      if File.exist?(path) && !File.symlink?(path)
+        begin
+          # Check if already patched
+          text = File.read(path)
+          if text.include?('// typedef uint8_t clockid_t; // Commented out')
+            puts "RCT-Folly Time.h header already patched: #{path}"
+            next
+          end
+          
+          puts "Patching RCT-Folly Time.h header: #{path}"
+          # Make file writable if needed
+          File.chmod(0644, path) if File.writable?(path) == false
+          # Comment out the typedef on Apple platforms to avoid redefinition
+          text.gsub!(/^(\s*)typedef uint8_t clockid_t;/, '\1// typedef uint8_t clockid_t; // Commented out: clockid_t already defined on Apple platforms')
+          File.write(path, text)
+          puts "RCT-Folly header patched successfully"
+        rescue => e
+          puts "Warning: Could not patch RCT-Folly header #{path}: #{e.message}"
+          puts "This is non-critical - the build may still succeed"
+        end
+      elsif File.symlink?(path)
+        begin
+          # If it's a symlink, resolve it and patch the actual file
+          real_path = File.realpath(path)
+          if File.exist?(real_path)
+            text = File.read(real_path)
+            if text.include?('// typedef uint8_t clockid_t; // Commented out')
+              puts "RCT-Folly Time.h header already patched: #{real_path}"
+              next
+            end
+            
+            puts "Patching RCT-Folly Time.h header (resolved symlink): #{real_path}"
+            File.chmod(0644, real_path) if File.writable?(real_path) == false
+            text.gsub!(/^(\s*)typedef uint8_t clockid_t;/, '\1// typedef uint8_t clockid_t; // Commented out: clockid_t already defined on Apple platforms')
+            File.write(real_path, text)
+            puts "RCT-Folly header patched successfully"
+          end
+        rescue => e
+          puts "Warning: Could not patch RCT-Folly header #{real_path}: #{e.message}"
+          puts "This is non-critical - the build may still succeed"
+        end
+      end
+    end
+    
+    # BoringSSL-GRPC: GCC_WARN_INHIBIT_ALL_WARNINGS in xcconfig becomes invalid clang -G on simulator
+    boring_ssl_xcconfig_paths = [
+      File.join(installer.sandbox.root, 'Target Support Files', 'BoringSSL-GRPC', 'BoringSSL-GRPC.xcconfig'),
+      File.join(installer.sandbox.root, 'Target Support Files', 'BoringSSL-GRPC', 'BoringSSL-GRPC.debug.xcconfig'),
+      File.join(installer.sandbox.root, 'Target Support Files', 'BoringSSL-GRPC', 'BoringSSL-GRPC.release.xcconfig'),
+    ]
+    boring_ssl_xcconfig_paths.each do |xcconfig_path|
+      next unless File.exist?(xcconfig_path)
+
+      text = File.read(xcconfig_path)
+      patched = text.gsub(/^\s*GCC_WARN_INHIBIT_ALL_WARNINGS\s*=\s*.*\n/, '')
+      patched = patched.gsub(/\s*-GCC_WARN_INHIBIT_ALL_WARNINGS\b/, '')
+      patched = patched.gsub(/\bGCC_WARN_INHIBIT_ALL_WARNINGS\b/, 'NO') if patched.include?('GCC_WARN_INHIBIT_ALL_WARNINGS')
+
+      if patched != text
+        File.write(xcconfig_path, patched)
+        puts "Patched BoringSSL-GRPC xcconfig (removed GCC_WARN_INHIBIT_ALL_WARNINGS): #{xcconfig_path}"
+      end
+    end
+
+    installer.pods_project.targets.each do |target|
+      next unless target.name == 'BoringSSL-GRPC'
+
+      target.build_phases.each do |phase|
+        next unless phase.respond_to?(:files)
+
+        phase.files.each do |build_file|
+          next unless build_file.settings && build_file.settings['COMPILER_FLAGS']
+
+          flags = build_file.settings['COMPILER_FLAGS']
+          cleaned = flags.gsub(/-GCC_WARN_INHIBIT_ALL_WARNINGS\b/, '').gsub(/\s+/, ' ').strip
+          build_file.settings['COMPILER_FLAGS'] = cleaned if cleaned != flags
+        end
+      end
+    end
+    installer.pods_project.save
+
+    # Fix BoringSSL-GRPC and gRPC-Core unsupported -G flag issue
+    puts "Fixing BoringSSL-GRPC/gRPC-Core unsupported -G flag..."
+    installer.pods_project.targets.each do |target|
+      if target.name == 'BoringSSL-GRPC' || target.name == 'gRPC-Core' || target.name == 'DoubleConversion'
+        target.build_configurations.each do |config|
+          # Remove problematic flags - the -G flag comes from GCC_WARN_INHIBIT_ALL_WARNINGS
+          # This setting causes clang to add -G flag which is unsupported
+          config.build_settings.delete('GCC_WARN_INHIBIT_ALL_WARNINGS')
+          config.build_settings['WARNING_CFLAGS'] = '-w'
+          config.build_settings['WARNING_CPPFLAGS'] = '-w'
+          config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'NO'
+          config.build_settings['GCC_WARN_64_TO_32_BIT_CONVERSION'] = 'NO'
+          
+          # Clean ALL flag arrays that might contain -G or -GCC_WARN_INHIBIT_ALL_WARNINGS
+          ['OTHER_CFLAGS', 'OTHER_CPLUSPLUSFLAGS', 'OTHER_SWIFT_FLAGS'].each do |flag_key|
+            flags = config.build_settings[flag_key]
+            next if flags.nil?
+            
+            if flags.is_a?(String)
+              # Remove -G, -GCC_WARN_INHIBIT_ALL_WARNINGS, and any -G* flags
+              flags_array = flags.split(/\s+/).reject do |f|
+                f == '-G' || 
+                f == '-GCC_WARN_INHIBIT_ALL_WARNINGS' ||
+                f.include?('GCC_WARN_INHIBIT_ALL_WARNINGS') ||
+                f.start_with?('-G')
+              end
+              config.build_settings[flag_key] = flags_array.join(' ')
+            elsif flags.is_a?(Array)
+              config.build_settings[flag_key] = flags.reject do |f|
+                f_str = f.to_s
+                f_str == '-G' || 
+                f_str == '-GCC_WARN_INHIBIT_ALL_WARNINGS' ||
+                f_str.include?('GCC_WARN_INHIBIT_ALL_WARNINGS') ||
+                f_str.start_with?('-G')
+              end
+            end
+          end
+          
+          # Also check compiler flags directly
+          ['COMPILER_FLAGS', 'CC_FLAGS'].each do |flag_key|
+            next unless config.build_settings[flag_key]
+            flags = config.build_settings[flag_key]
+            if flags.is_a?(String)
+              flags_array = flags.split(/\s+/).reject { |f| f == '-G' || f == '-GCC_WARN_INHIBIT_ALL_WARNINGS' || f.start_with?('-G') }
+              config.build_settings[flag_key] = flags_array.join(' ')
+            elsif flags.is_a?(Array)
+              config.build_settings[flag_key] = flags.reject { |f| f_str = f.to_s; f_str == '-G' || f_str == '-GCC_WARN_INHIBIT_ALL_WARNINGS' || f_str.start_with?('-G') }
+            end
+          end
+        end
+        puts "Removed -G flag and warning flags from #{target.name} build settings"
+      end
+    end
+    
+  end
+
+  # CocoaPods regenerates Headers/Private during integration; create module maps after that.
+  post_integrate do |installer|
+    puts "Creating gRPC/BoringSSL module map files (post_integrate)..."
+
+    openssl_grpc_dir = File.join(installer.sandbox.root, 'Headers', 'Private', 'openssl_grpc')
+    FileUtils.mkdir_p(openssl_grpc_dir)
+    boring_ssl_modulemap = File.join(openssl_grpc_dir, 'BoringSSL-GRPC.modulemap')
+
+    source_boring_ssl = File.join(installer.sandbox.root, 'BoringSSL-GRPC', 'src', 'include', 'openssl', 'BoringSSL.modulemap')
+    if !File.exist?(source_boring_ssl)
+      source_boring_ssl = File.join(installer.sandbox.root, 'Target Support Files', 'BoringSSL-GRPC', 'BoringSSL-GRPC.modulemap')
+    end
+    if !File.exist?(source_boring_ssl)
+      Dir.glob(File.join(installer.sandbox.root, 'BoringSSL-GRPC', '**', '*.modulemap')).each do |path|
+        source_boring_ssl = path
+        break
+      end
+    end
+    if File.exist?(source_boring_ssl)
+      FileUtils.cp(source_boring_ssl, boring_ssl_modulemap)
+      puts "Created BoringSSL-GRPC.modulemap from #{source_boring_ssl}"
+    else
+      puts "Warning: Could not find BoringSSL.modulemap source"
+    end
+
+    grpc_dir = File.join(installer.sandbox.root, 'Headers', 'Private', 'grpc')
+    FileUtils.mkdir_p(grpc_dir)
+    grpc_modulemap = File.join(grpc_dir, 'gRPC-Core.modulemap')
+
+    source_grpc = File.join(installer.sandbox.root, 'Target Support Files', 'gRPC-Core', 'gRPC-Core.modulemap')
+    if File.exist?(source_grpc)
+      FileUtils.cp(source_grpc, grpc_modulemap)
+      puts "Created gRPC-Core.modulemap from #{source_grpc}"
+    else
+      Dir.glob(File.join(installer.sandbox.root, '**', 'gRPC-Core.modulemap')).each do |path|
+        if path.include?('Target Support Files')
+          FileUtils.cp(path, grpc_modulemap)
+          puts "Created gRPC-Core.modulemap from #{path}"
+          break
+        end
+      end
+    end
+  end
+end
