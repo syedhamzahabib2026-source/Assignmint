@@ -1,3 +1,5 @@
+<!-- AssignMint is a React Native iOS app that connects students with qualified experts for on-demand assignment help. Students post tasks, get matched with vetted experts, communicate via real-time chat, and pay securely — all in one place. -->
+
 # AssignMint - Assignment Help Marketplace
 
 A React Native iOS app that connects students with qualified experts for assignment help.

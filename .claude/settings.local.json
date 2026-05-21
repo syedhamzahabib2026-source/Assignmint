@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(xcopy \"C:\\\\Users\\\\shamz\\\\Assignmint\" \"C:\\\\Users\\\\shamz\\\\Desktop\\\\Assignmint\" /E /I /H /Y 2>&1 | Select-Object -Last 5)"
+    ]
+  }
+}
