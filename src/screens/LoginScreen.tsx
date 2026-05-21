@@ -108,7 +108,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -144,7 +148,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           </View>
 
           {/* Password Input */}
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, styles.passwordFieldGroup]}>
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
@@ -281,18 +285,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
+    paddingBottom: 48,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 16,
     marginBottom: 24,
   },
   backButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: FONTS.sizes.lg,
     fontWeight: FONTS.weights.semiBold,
     color: COLORS.text,
@@ -317,6 +326,9 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 24,
+  },
+  passwordFieldGroup: {
+    marginBottom: 12,
   },
   label: {
     fontSize: FONTS.sizes.sm,
@@ -360,7 +372,8 @@ const styles = StyleSheet.create({
   },
   forgotPasswordButton: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
+    marginTop: 4,
+    marginBottom: 20,
   },
   forgotPasswordText: {
     fontSize: FONTS.sizes.sm,
@@ -369,6 +382,8 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     backgroundColor: COLORS.primary,
+    minHeight: 48,
+    justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 8,
     marginBottom: 24,
