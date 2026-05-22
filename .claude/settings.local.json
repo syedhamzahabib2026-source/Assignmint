@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(xcopy \"C:\\\\Users\\\\shamz\\\\Assignmint\" \"C:\\\\Users\\\\shamz\\\\Desktop\\\\Assignmint\" /E /I /H /Y 2>&1 | Select-Object -Last 5)"
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git pull*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(npx react-native*)",
+      "Bash(npm run*)"
     ]
   }
 }
