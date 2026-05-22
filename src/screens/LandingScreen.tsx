@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   primaryButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#0066CC',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
