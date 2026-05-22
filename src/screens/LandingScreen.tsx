@@ -184,11 +184,11 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: '#666666',
     textAlign: 'center',
   },
   featuresSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     marginBottom: 32,
   },
   sectionTitle: {
