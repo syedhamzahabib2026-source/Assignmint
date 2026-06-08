@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   ActivityIndicator,
   RefreshControl,
@@ -18,336 +17,338 @@ import { useAuth } from '../state/AuthProvider';
 import { Task } from '../types/firestore';
 import GuestGate from '../components/common/GuestGate';
 
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  open:        { label: 'Open',        color: COLORS.primary },
+  reserved:    { label: 'Reserved',    color: COLORS.secondary },
+  claimed:     { label: 'Claimed',     color: COLORS.warning },
+  in_progress: { label: 'In Progress', color: COLORS.warning },
+  submitted:   { label: 'Submitted',   color: COLORS.teal },
+  completed:   { label: 'Completed',   color: COLORS.success },
+  cancelled:   { label: 'Cancelled',   color: COLORS.error },
+};
+
+const statusConfig = (status: string) =>
+  STATUS_CONFIG[status] ?? { label: status, color: COLORS.textSecondary };
+
+const formatDeadline = (deadline: Date | any): string => {
+  if (!deadline) return 'No deadline';
+  const d = deadline instanceof Date ? deadline : (deadline.toDate?.() ?? new Date(deadline));
+  const now = new Date();
+  const diff = d.getTime() - now.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (diff < 0) return 'Overdue';
+  if (days === 0) return 'Due today';
+  if (days === 1) return 'Due tomorrow';
+  return `Due in ${days}d`;
+};
+
+const formatDate = (date: Date | any): string => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : (date.toDate?.() ?? new Date(date));
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// ─── component ──────────────────────────────────────────────────────────────
+
+type FilterId = 'All' | 'Posted' | 'Accepted' | 'Completed';
+
+const FILTERS: { id: FilterId; label: string }[] = [
+  { id: 'All',       label: 'All' },
+  { id: 'Posted',    label: 'Posted' },
+  { id: 'Accepted',  label: 'Accepted' },
+  { id: 'Completed', label: 'Completed' },
+];
+
 const MyTasksScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState<FilterId>('All');
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [postedIds, setPostedIds] = useState<Set<string>>(new Set());
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadMyTasks = async () => {
+  const loadMyTasks = useCallback(async () => {
     if (!user) {
       setLoading(false);
       setRefreshing(false);
       return;
     }
 
+    setError(null);
+
+    let created: Task[] = [];
+    let accepted: Task[] = [];
+
     try {
-      setError(null);
-      
-      // Get tasks created by user (as requester)
-      let createdTasks: Task[] = [];
-      try {
-        createdTasks = await firestoreService.getTasks({
-          createdBy: user.uid,
-          limit: 50,
-        });
-      } catch (error) {
-        console.warn('⚠️ Failed to load created tasks:', error);
-      }
-      
-      // Get tasks completed by user (as expert)
-      let completedTasks: Task[] = [];
-      try {
-        completedTasks = await firestoreService.getTasks({
-          completedBy: user.uid,
-          limit: 50,
-        });
-      } catch (error) {
-        console.warn('⚠️ Failed to load completed tasks:', error);
-      }
-      
-      // Combine and deduplicate tasks
-      const allTasks = [...createdTasks, ...completedTasks];
-      const uniqueTasks = allTasks.filter((task, index, self) => 
-        index === self.findIndex(t => t.id === task.id)
-      );
-      
-      console.log('📱 MyTasks loaded:', uniqueTasks.length);
-      setTasks(uniqueTasks);
-    } catch (error: any) {
-      console.error('❌ Error loading my tasks:', error);
-      setError(error?.message || 'Failed to load tasks');
-      setTasks([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      created = await firestoreService.getTasks({ createdBy: user.uid, limit: 50 });
+    } catch (err) {
+      console.warn('⚠️ Failed to load posted tasks:', err);
     }
-  };
+
+    try {
+      accepted = await firestoreService.getTasks({ completedBy: user.uid, limit: 50 });
+    } catch (err) {
+      console.warn('⚠️ Failed to load accepted tasks:', err);
+    }
+
+    const createdSet = new Set(created.map(t => t.id));
+    const acceptedSet = new Set(accepted.map(t => t.id));
+
+    // Merge, deduplicate — prefer the created copy so createdByName etc. are always populated
+    const seen = new Set<string>();
+    const merged: Task[] = [];
+    for (const t of [...created, ...accepted]) {
+      if (!seen.has(t.id)) {
+        seen.add(t.id);
+        merged.push(t);
+      }
+    }
+
+    setPostedIds(createdSet);
+    setAcceptedIds(acceptedSet);
+    setTasks(merged);
+    setLoading(false);
+    setRefreshing(false);
+  }, [user]);
 
   useEffect(() => {
-    if (user) {
-      loadMyTasks();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
+    loadMyTasks();
+  }, [loadMyTasks]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     loadMyTasks();
   };
 
-  const filters = [
-    { id: 'All', label: 'All Tasks', icon: Icons.task },
-    { id: 'Active', label: 'Active', icon: Icons.clock },
-    { id: 'In Progress', label: 'In Progress', icon: Icons.check },
-    { id: 'Completed', label: 'Completed', icon: Icons.check },
-  ];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return COLORS.primary;
-      case 'IN_PROGRESS': return COLORS.warning;
-      case 'COMPLETED': return COLORS.success;
-      case 'CANCELLED': return COLORS.error;
-      default: return COLORS.textSecondary;
-    }
-  };
-
-  const getActionButtonStyle = (action: string) => {
-    switch (action) {
-      case 'View': return { backgroundColor: COLORS.primary };
-      case 'Edit': return { backgroundColor: COLORS.info };
-      case 'Cancel': return { backgroundColor: COLORS.error };
-      case 'Review': return { backgroundColor: COLORS.success };
-      case 'Message': return { backgroundColor: COLORS.warning };
-      default: return { backgroundColor: COLORS.primary };
-    }
-  };
-
   const filteredTasks = tasks.filter(task => {
-    if (activeFilter === 'All') {return true;}
-    if (activeFilter === 'Active') {return task.status === 'open';}
-    if (activeFilter === 'In Progress') {return task.status === 'in_progress';}
-    if (activeFilter === 'Completed') {return task.status === 'completed';}
-    return true;
+    switch (activeFilter) {
+      case 'Posted':    return postedIds.has(task.id);
+      case 'Accepted':  return acceptedIds.has(task.id) && !postedIds.has(task.id);
+      case 'Completed': return task.status === 'completed';
+      default:          return true;
+    }
   });
 
-  const TaskCard: React.FC<{ task: any }> = ({ task }) => {
-    // Calculate time remaining
-    const deadline = new Date(task.deadline);
-    const now = new Date();
-    const timeDiff = deadline.getTime() - now.getTime();
-    const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
-    let timeRemaining = '';
-    if (timeDiff <= 0) {
-      timeRemaining = 'Overdue';
-    } else if (days > 0) {
-      timeRemaining = `${days}d ${hours}h`;
-    } else {
-      timeRemaining = `${hours}h`;
-    }
+  // ─── TaskCard ──────────────────────────────────────────────────────────────
 
-    // Check if task has auto-assigned expert
-    const hasAssignedExpert = task.assignedExpert && task.assignedExpertName;
-    const isAutoMatched = task.autoMatch && task.matchingType === 'auto';
+  const TaskCard: React.FC<{ task: Task }> = ({ task }) => {
+    const cfg = statusConfig(task.status);
+    const isPosted   = postedIds.has(task.id);
+    const isAccepted = acceptedIds.has(task.id) && !isPosted;
+    const deadlineText = formatDeadline(task.deadline);
+    const isOverdue = deadlineText === 'Overdue';
 
     return (
-      <View style={styles.taskCard}>
-        <View style={styles.taskHeader}>
-          <View style={styles.taskMeta}>
-            <Text style={styles.taskDate}>Posted {new Date(task.createdAt).toLocaleDateString()}</Text>
-            <View style={styles.statusContainer}>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(task.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(task.status) }]}>
-                  {task.status.replace('_', ' ')}
-                </Text>
-              </View>
-              {isAutoMatched && (
-                <View style={[styles.autoMatchBadge, { backgroundColor: COLORS.success + '20' }]}>
-                  <Text style={[styles.autoMatchText, { color: COLORS.success }]}>
-                    🤖 Auto
-                  </Text>
-                </View>
-              )}
+      <TouchableOpacity
+        style={styles.taskCard}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('TaskDetails', { taskId: task.id })}
+      >
+        {/* Card header row */}
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            {/* Role badge */}
+            <View style={[
+              styles.roleBadge,
+              { backgroundColor: isAccepted ? COLORS.success + '20' : COLORS.primary + '15' },
+            ]}>
+              <Text style={[
+                styles.roleBadgeText,
+                { color: isAccepted ? COLORS.success : COLORS.primary },
+              ]}>
+                {isAccepted ? 'Accepted' : 'Posted'}
+              </Text>
+            </View>
+
+            {/* Status badge */}
+            <View style={[styles.statusBadge, { backgroundColor: cfg.color + '20' }]}>
+              <Text style={[styles.statusBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
             </View>
           </View>
-          <Text style={styles.taskPrice}>${task.price}</Text>
+
+          <Text style={styles.price}>${task.price}</Text>
         </View>
 
-        <Text style={styles.taskTitle}>{task.title}</Text>
-        <Text style={styles.taskDescription}>{task.description}</Text>
+        {/* Title */}
+        <Text style={styles.taskTitle} numberOfLines={2}>{task.title}</Text>
 
-        {/* Show assigned expert if auto-matched */}
-        {hasAssignedExpert && (
-          <View style={styles.assignedExpertContainer}>
-            <View style={styles.assignedExpertInfo}>
-              <Icon name={Icons.user} size={16} color={COLORS.success} />
-              <Text style={styles.assignedExpertLabel}>Assigned Expert:</Text>
-              <Text style={styles.assignedExpertName}>{task.assignedExpertName}</Text>
-            </View>
-            <View style={styles.assignedExpertBadge}>
-              <Text style={styles.assignedExpertBadgeText}>✓ Assigned</Text>
+        {/* Subject + description */}
+        <Text style={styles.subject}>{task.subject}</Text>
+        {!!task.description && (
+          <Text style={styles.description} numberOfLines={2}>{task.description}</Text>
+        )}
+
+        {/* Assigned expert row (auto-matched tasks) */}
+        {task.assignedExpert && task.assignedExpertName && (
+          <View style={styles.expertRow}>
+            <Icon name={Icons.user} size={14} color={COLORS.success} />
+            <Text style={styles.expertText}>{task.assignedExpertName}</Text>
+            <View style={styles.assignedBadge}>
+              <Text style={styles.assignedBadgeText}>Assigned</Text>
             </View>
           </View>
         )}
 
-        <View style={styles.taskFooter}>
-          <View style={styles.taskInfo}>
-            <View style={styles.timeInfo}>
-              <Icon name={Icons.clock} size={16} color={COLORS.textSecondary} />
-              <Text style={styles.timeText}>
-                {timeRemaining === 'Overdue' ? 'Overdue' : `Due in ${timeRemaining}`}
+        {/* Posted by (for accepted tasks) */}
+        {isAccepted && task.createdByName && (
+          <View style={styles.expertRow}>
+            <Icon name={Icons.user} size={14} color={COLORS.textSecondary} />
+            <Text style={styles.postedByText}>Posted by {task.createdByName}</Text>
+          </View>
+        )}
+
+        {/* Footer row */}
+        <View style={styles.cardFooter}>
+          <View style={styles.footerLeft}>
+            <View style={styles.metaItem}>
+              <Icon name={Icons.time} size={14} color={isOverdue ? COLORS.error : COLORS.textSecondary} />
+              <Text style={[styles.metaText, isOverdue && { color: COLORS.error }]}>
+                {deadlineText}
               </Text>
             </View>
-            <View style={styles.applicantsInfo}>
-              <Icon name={Icons.users} size={16} color={COLORS.textSecondary} />
-              <Text style={styles.applicantsText}>
-                {hasAssignedExpert ? '1 expert assigned' : `${task.applicants?.length || 0} applicants`}
-              </Text>
-            </View>
+            {isPosted && (
+              <View style={styles.metaItem}>
+                <Icon name={Icons.users} size={14} color={COLORS.textSecondary} />
+                <Text style={styles.metaText}>
+                  {task.applicants?.length ?? 0} applicant{task.applicants?.length !== 1 ? 's' : ''}
+                </Text>
+              </View>
+            )}
+            {task.createdAt && (
+              <View style={styles.metaItem}>
+                <Icon name={Icons.calendar} size={14} color={COLORS.textSecondary} />
+                <Text style={styles.metaText}>{formatDate(task.createdAt)}</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
-            style={[styles.actionButton, getActionButtonStyle('View')]}
-            onPress={() => console.log(`View task: ${task.id}`)}
+            style={styles.viewButton}
+            onPress={() => navigation.navigate('TaskDetails', { taskId: task.id })}
           >
-            <Text style={styles.actionButtonText}>
-              {hasAssignedExpert ? 'Chat' : 'View'}
-            </Text>
+            <Text style={styles.viewButtonText}>View</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
+
+  // ─── render ───────────────────────────────────────────────────────────────
+
+  const postedCount   = tasks.filter(t => postedIds.has(t.id)).length;
+  const acceptedCount = tasks.filter(t => acceptedIds.has(t.id) && !postedIds.has(t.id)).length;
+  const completedCount = tasks.filter(t => t.status === 'completed').length;
 
   return (
     <GuestGate action="view_my_tasks" navigation={navigation}>
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.menuButton}>
-          <Icon name={Icons.menu} size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Posted Tasks</Text>
-        <TouchableOpacity style={styles.notificationButton}>
-          <Icon name={Icons.notifications} size={24} color={COLORS.text} />
-        </TouchableOpacity>
-      </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>My Tasks</Text>
+        </View>
 
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
-          />
-        }
-      >
-        {/* Quick Stats */}
-        <View style={styles.statsSection}>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{tasks.filter(t => t.status === 'open').length}</Text>
-            <Text style={styles.statLabel}>Active</Text>
+            <Text style={styles.statNumber}>{postedCount}</Text>
+            <Text style={styles.statLabel}>Posted</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{tasks.filter(t => t.status === 'in_progress').length}</Text>
-            <Text style={styles.statLabel}>In Progress</Text>
+            <Text style={styles.statNumber}>{acceptedCount}</Text>
+            <Text style={styles.statLabel}>Accepted</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{tasks.filter(t => t.status === 'completed').length}</Text>
+            <Text style={styles.statNumber}>{completedCount}</Text>
             <Text style={styles.statLabel}>Completed</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {tasks.length}
-            </Text>
-            <Text style={styles.statLabel}>Total Tasks</Text>
+            <Text style={styles.statNumber}>{tasks.length}</Text>
+            <Text style={styles.statLabel}>Total</Text>
           </View>
         </View>
 
-        {/* Filter Section */}
-        <View style={styles.filterSection}>
-          <Text style={styles.sectionTitle}>Filter Tasks</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterScroll}
-          >
-            {filters.map((filter) => (
-              <TouchableOpacity
-                key={filter.id}
-                style={[
-                  styles.filterButton,
-                  activeFilter === filter.id && styles.filterButtonActive,
-                ]}
-                onPress={() => setActiveFilter(filter.id)}
-              >
-                <Icon name={filter.icon} size={20} color={activeFilter === filter.id ? COLORS.white : COLORS.textSecondary} />
-                <Text style={[
-                  styles.filterText,
-                  activeFilter === filter.id && styles.filterTextActive,
-                ]}>
-                  {filter.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Loading State */}
-        {loading && (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading your tasks...</Text>
-          </View>
-        )}
-
-        {/* Error State */}
-        {error && !loading && (
-          <View style={styles.errorState}>
-            <Icon name={Icons.alert} size={48} color={COLORS.error} />
-            <Text style={styles.errorTitle}>Failed to load tasks</Text>
-            <Text style={styles.errorDescription}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadMyTasks}>
-              <Text style={styles.retryButtonText}>Try Again</Text>
+        {/* Filter tabs */}
+        <View style={styles.filterRow}>
+          {FILTERS.map(f => (
+            <TouchableOpacity
+              key={f.id}
+              style={[styles.filterTab, activeFilter === f.id && styles.filterTabActive]}
+              onPress={() => setActiveFilter(f.id)}
+            >
+              <Text style={[styles.filterTabText, activeFilter === f.id && styles.filterTabTextActive]}>
+                {f.label}
+              </Text>
             </TouchableOpacity>
-          </View>
-        )}
+          ))}
+        </View>
 
-        {/* Posted Tasks Section */}
-        {filteredTasks.length > 0 && (
-          <View style={styles.taskSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Your Posted Tasks</Text>
-              <Text style={styles.taskCount}>({filteredTasks.length})</Text>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          }
+        >
+          {loading ? (
+            <View style={styles.centerState}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.stateText}>Loading your tasks...</Text>
             </View>
-            {filteredTasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
-            ))}
-          </View>
-        )}
+          ) : error ? (
+            <View style={styles.centerState}>
+              <Icon name={Icons.error} size={48} color={COLORS.error} />
+              <Text style={styles.stateTitle}>Failed to load tasks</Text>
+              <Text style={styles.stateText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadMyTasks}>
+                <Text style={styles.retryText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredTasks.length === 0 ? (
+            <View style={styles.centerState}>
+              <Icon name={Icons.briefcase} size={48} color={COLORS.textSecondary} />
+              <Text style={styles.stateTitle}>
+                {activeFilter === 'All' ? 'No tasks yet' : `No ${activeFilter.toLowerCase()} tasks`}
+              </Text>
+              <Text style={styles.stateText}>
+                {activeFilter === 'Posted'
+                  ? 'Post a task from the Post tab to see it here.'
+                  : activeFilter === 'Accepted'
+                  ? 'Accept a task from the Home feed to see it here.'
+                  : 'Your tasks will appear here once you get started.'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.resultCount}>
+                {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
+              </Text>
+              {filteredTasks.map(task => (
+                <TaskCard key={task.id} task={task} />
+              ))}
+            </>
+          )}
 
-        {/* Empty State */}
-        {filteredTasks.length === 0 && (
-          <View style={styles.emptyState}>
-            <Icon name={Icons.task} size={48} color={COLORS.textSecondary} />
-            <Text style={styles.emptyTitle}>No tasks found</Text>
-            <Text style={styles.emptyDescription}>
-              {activeFilter === 'All'
-                ? "You haven't posted any tasks yet. Tap the Post tab to create your first task!"
-                : `No ${activeFilter.toLowerCase()} tasks found. Try changing your filter.`
-              }
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-    </View>
+          <View style={styles.bottomPad} />
+        </ScrollView>
+      </View>
     </GuestGate>
   );
 };
+
+// ─── styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -355,330 +356,238 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.xl,
-    paddingBottom: SPACING.lg,
-    backgroundColor: COLORS.background,
+    paddingBottom: SPACING.md,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-  },
-  menuButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuIcon: {
-    fontSize: 20,
   },
   headerTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: FONTS.weights.bold,
     color: COLORS.text,
   },
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationIcon: {
-    fontSize: 18,
-  },
-  content: {
-    flex: 1,
-  },
-  filterSection: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  filterScroll: {
-    marginTop: SPACING.sm,
-  },
-  filterButton: {
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginRight: SPACING.sm,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterIcon: {
-    fontSize: 16,
-    marginRight: SPACING.xs,
-  },
-  filterText: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: FONTS.weights.medium,
-    color: COLORS.textSecondary,
-  },
-  filterTextActive: {
-    color: COLORS.white,
-  },
-  taskSection: {
-    paddingHorizontal: SPACING.lg,
-    marginTop: SPACING.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: FONTS.weights.bold,
-    color: COLORS.text,
-  },
-  taskCount: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.xs,
-  },
-  taskCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  taskHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.sm,
-  },
-  taskMeta: {
-    flex: 1,
-  },
-  taskDate: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.xs,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: FONTS.weights.bold,
-    textTransform: 'uppercase',
-  },
-  taskPrice: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: FONTS.weights.bold,
-    color: COLORS.primary,
-  },
-  taskTitle: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: FONTS.weights.bold,
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  taskDescription: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-    marginBottom: SPACING.md,
-  },
-  taskFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  taskInfo: {
-    flex: 1,
-  },
-  timeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  timeIcon: {
-    fontSize: 16,
-    marginRight: SPACING.xs,
-  },
-  timeText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
-  applicantsInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  applicantsText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.xs,
-  },
-  actionButton: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 20,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  actionButtonText: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: FONTS.weights.bold,
-    color: COLORS.white,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: SPACING.md,
-  },
-  emptyTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: FONTS.weights.bold,
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-  emptyDescription: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  bottomSpacing: {
-    height: SPACING.xl,
-  },
-  statsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
     backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   statCard: {
+    flex: 1,
     alignItems: 'center',
-    width: '25%',
+    paddingVertical: SPACING.md,
   },
   statNumber: {
     fontSize: FONTS.sizes.xl,
     fontWeight: FONTS.weights.bold,
     color: COLORS.primary,
-    marginBottom: SPACING.xs,
   },
   statLabel: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+    gap: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  filterTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+  },
+  filterTabActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterTabText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: FONTS.weights.medium,
+    color: COLORS.textSecondary,
+  },
+  filterTabTextActive: {
+    color: COLORS.white,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: SPACING.lg,
+  },
+  resultCount: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-  },
-  loadingState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
-  },
-  loadingText: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.md,
-  },
-  errorState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
-  },
-  errorTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: FONTS.weights.bold,
-    color: COLORS.error,
     marginBottom: SPACING.sm,
   },
-  errorDescription: {
+  centerState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  stateTitle: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.text,
+  },
+  stateText: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    paddingHorizontal: 20,
     lineHeight: 20,
-    marginBottom: SPACING.md,
   },
   retryButton: {
+    marginTop: 8,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  retryButtonText: {
+  retryText: {
     color: COLORS.white,
+    fontWeight: FONTS.weights.semiBold,
+    fontSize: FONTS.sizes.md,
+  },
+  taskCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    gap: 6,
+    flex: 1,
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: FONTS.weights.semiBold,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: FONTS.weights.semiBold,
+  },
+  price: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.primary,
+    marginLeft: 8,
+  },
+  taskTitle: {
     fontSize: FONTS.sizes.md,
     fontWeight: FONTS.weights.bold,
+    color: COLORS.text,
+    marginBottom: 4,
   },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
+  subject: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.primary,
+    fontWeight: FONTS.weights.medium,
+    marginBottom: 4,
   },
-  autoMatchBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
-  },
-  autoMatchText: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: FONTS.weights.bold,
-    textTransform: 'uppercase',
-  },
-  assignedExpertContainer: {
-    backgroundColor: COLORS.success + '10',
-    borderRadius: 12,
-    padding: SPACING.md,
-    marginVertical: SPACING.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.success,
-  },
-  assignedExpertInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  assignedExpertLabel: {
+  description: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-    marginLeft: SPACING.xs,
-    marginRight: SPACING.xs,
+    lineHeight: 18,
+    marginBottom: SPACING.sm,
   },
-  assignedExpertName: {
+  expertRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.gray100,
+    borderRadius: 8,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  expertText: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: FONTS.weights.bold,
+    fontWeight: FONTS.weights.semiBold,
     color: COLORS.success,
+    flex: 1,
   },
-  assignedExpertBadge: {
-    alignSelf: 'flex-start',
+  postedByText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  assignedBadge: {
     backgroundColor: COLORS.success,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  assignedExpertBadgeText: {
-    fontSize: FONTS.sizes.xs,
+  assignedBadgeText: {
+    fontSize: 10,
     fontWeight: FONTS.weights.bold,
     color: COLORS.white,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  footerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textSecondary,
+  },
+  viewButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginLeft: SPACING.sm,
+  },
+  viewButtonText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.white,
+  },
+  bottomPad: {
+    height: 20,
   },
 });
 

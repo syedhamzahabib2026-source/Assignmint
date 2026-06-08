@@ -1,4 +1,4 @@
-// src/services/taskService.ts - Task management with React Native Firebase
+// src/services/taskService.ts
 import { getFirebaseDb } from '../lib/firebase';
 import firestore from '@react-native-firebase/firestore';
 import { Task } from '../types';
@@ -7,22 +7,19 @@ export interface CreateTaskData {
   title: string;
   subject: string;
   description?: string;
-  budget: number;
-  deadline: string;
-  deadlineTime?: string;
+  price: number;
+  deadline: string;        // date string "YYYY-MM-DD"
+  deadlineTime?: string;   // optional time "HH:MM"
   urgency: 'low' | 'medium' | 'high';
-  matchingPreference: 'auto' | 'manual';
+  matchingType: 'manual' | 'auto';
   autoMatch?: boolean;
-  matchingType?: 'manual' | 'auto';
-  isForStudent?: boolean;
-  ownerId: string;
-  ownerName: string;
-  ownerEmail: string;
+  createdBy: string;
+  createdByName: string;
   aiLevel?: number;
-  aiTaskExplainer?: boolean;
-  summaryOnDelivery?: boolean;
-  uploadedFiles?: string[];
-  selectedTemplate?: string;
+  fileUrls?: string[];
+  tags?: string[];
+  specialInstructions?: string;
+  estimatedHours?: number;
 }
 
 export interface CreateTaskResult {
@@ -32,68 +29,51 @@ export interface CreateTaskResult {
 }
 
 class TaskService {
-  async createTask(taskData: CreateTaskData): Promise<CreateTaskResult> {
+  async createTask(data: CreateTaskData): Promise<CreateTaskResult> {
     try {
-      console.log('🔥 Creating task:', taskData);
+      console.log('🔥 Creating task:', data.title);
 
-      let deadlineISO = taskData.deadline;
-      if (taskData.deadlineTime) {
-        deadlineISO = new Date(`${taskData.deadline} ${taskData.deadlineTime}`).toISOString();
-      } else {
-        deadlineISO = new Date(taskData.deadline).toISOString();
-      }
+      const deadlineDate = data.deadlineTime
+        ? new Date(`${data.deadline} ${data.deadlineTime}`)
+        : new Date(data.deadline);
 
       const ref = getFirebaseDb().collection('tasks').doc();
 
       await ref.set({
-        taskId: ref.id,
-        title: taskData.title,
-        subject: taskData.subject,
-        description: taskData.description || '',
-        price: taskData.budget,
-        deadlineISO,
-        urgency: taskData.urgency,
+        id: ref.id,
+        title: data.title,
+        subject: data.subject,
+        description: data.description || '',
+        price: data.price,
+        deadline: firestore.Timestamp.fromDate(deadlineDate),
+        urgency: data.urgency,
         status: 'open',
-        ownerId: taskData.ownerId,
-        ownerName: taskData.ownerName,
-        ownerEmail: taskData.ownerEmail,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-
-        matchingPreference: taskData.matchingPreference,
-        matchingType: taskData.matchingType || taskData.matchingPreference,
-        autoMatch: taskData.autoMatch || (taskData.matchingPreference === 'auto'),
+        createdBy: data.createdBy,
+        createdByName: data.createdByName,
+        matchingType: data.matchingType,
+        autoMatch: data.autoMatch ?? (data.matchingType === 'auto'),
+        aiLevel: data.aiLevel ?? 50,
+        fileUrls: data.fileUrls || [],
+        tags: data.tags || this.generateTags(data.title, data.description || '', data.subject),
+        specialInstructions: data.specialInstructions || '',
+        estimatedHours: data.estimatedHours ?? null,
+        applicants: [],
+        assignedExpert: null,
+        assignedExpertName: null,
         reservedBy: null,
         reservedUntil: null,
-        matching: {
-          invitedCount: 0,
-          acceptedCount: 0,
-          declinedCount: 0,
-          currentWave: 0,
-          lastInviteAt: null,
-          nextWaveAt: null,
-          invitedNow: 0,
-        },
-
-        aiLevel: taskData.aiLevel || 50,
-        aiTaskExplainer: taskData.aiTaskExplainer || false,
-        summaryOnDelivery: taskData.summaryOnDelivery || false,
-        uploadedFiles: taskData.uploadedFiles || [],
-        selectedTemplate: taskData.selectedTemplate || '',
-
-        isActive: true,
-        isForStudent: taskData.isForStudent || false,
-        tags: this.generateTags(taskData.title, taskData.description || '', taskData.subject),
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log('✅ Task created with ID:', ref.id);
+      console.log('✅ Task created:', ref.id);
 
       return {
         success: true,
         taskId: ref.id,
-        message: taskData.matchingPreference === 'manual'
-          ? 'Task posted to expert marketplace!'
-          : 'Task created and queued for auto-assignment!',
+        message: data.matchingType === 'auto'
+          ? 'Task created and queued for auto-assignment!'
+          : 'Task posted to expert marketplace!',
       };
     } catch (error) {
       console.error('❌ Error creating task:', error);
@@ -108,13 +88,13 @@ class TaskService {
     try {
       const doc = await getFirebaseDb().collection('tasks').doc(taskId).get();
       if (!doc.exists) return null;
-
       const data = doc.data() as any;
       return {
-        taskId: doc.id,
+        id: doc.id,
         ...data,
         createdAt: data.createdAt instanceof firestore.Timestamp ? data.createdAt.toDate() : data.createdAt,
         updatedAt: data.updatedAt instanceof firestore.Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+        deadline: data.deadline instanceof firestore.Timestamp ? data.deadline.toDate() : new Date(data.deadline),
       } as Task;
     } catch (error) {
       console.error('❌ Error getting task:', error);
@@ -126,7 +106,6 @@ class TaskService {
     return getFirebaseDb()
       .collection('tasks')
       .where('status', '==', 'open')
-      .where('isActive', '==', true)
       .orderBy('createdAt', 'desc')
       .limit(20)
       .onSnapshot(
@@ -134,13 +113,14 @@ class TaskService {
           const tasks: Task[] = (snapshot?.docs ?? []).map((doc: any) => {
             const data = doc.data();
             return {
-              taskId: doc.id,
+              id: doc.id,
               ...data,
               createdAt: data.createdAt instanceof firestore.Timestamp ? data.createdAt.toDate() : data.createdAt,
               updatedAt: data.updatedAt instanceof firestore.Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+              deadline: data.deadline instanceof firestore.Timestamp ? data.deadline.toDate() : new Date(data.deadline),
             } as Task;
           });
-          console.log(`📡 Real-time feed update: ${tasks.length} open tasks`);
+          console.log(`📡 Open tasks update: ${tasks.length}`);
           callback(tasks);
         },
         (error: any) => {
@@ -150,10 +130,10 @@ class TaskService {
       );
   }
 
-  getUserTasks(ownerId: string, callback: (tasks: Task[]) => void): () => void {
+  getUserTasks(createdBy: string, callback: (tasks: Task[]) => void): () => void {
     return getFirebaseDb()
       .collection('tasks')
-      .where('ownerId', '==', ownerId)
+      .where('createdBy', '==', createdBy)
       .orderBy('createdAt', 'desc')
       .limit(50)
       .onSnapshot(
@@ -161,13 +141,14 @@ class TaskService {
           const tasks: Task[] = (snapshot?.docs ?? []).map((doc: any) => {
             const data = doc.data();
             return {
-              taskId: doc.id,
+              id: doc.id,
               ...data,
               createdAt: data.createdAt instanceof firestore.Timestamp ? data.createdAt.toDate() : data.createdAt,
               updatedAt: data.updatedAt instanceof firestore.Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+              deadline: data.deadline instanceof firestore.Timestamp ? data.deadline.toDate() : new Date(data.deadline),
             } as Task;
           });
-          console.log(`📡 Real-time user tasks update: ${tasks.length} tasks for ${ownerId}`);
+          console.log(`📡 User tasks update: ${tasks.length} for ${createdBy}`);
           callback(tasks);
         },
         (error: any) => {
@@ -178,12 +159,12 @@ class TaskService {
   }
 
   private generateTags(title: string, description: string, subject: string): string[] {
-    const text = `${title} ${description} ${subject}`.toLowerCase();
-    const words = text.split(/\s+/).filter(word => word.length > 2);
-    const commonWords = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'];
-    const tags = [...new Set(words.filter(word => !commonWords.includes(word)))];
-    tags.push(subject.toLowerCase());
-    return tags.slice(0, 10);
+    const stopWords = new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'let', 'put', 'say', 'she', 'too', 'use']);
+    const words = `${title} ${description} ${subject}`
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !stopWords.has(w));
+    return [...new Set([...words, subject.toLowerCase()])].slice(0, 10);
   }
 }
 

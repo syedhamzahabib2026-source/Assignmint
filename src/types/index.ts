@@ -1,66 +1,9 @@
-// types/index.ts - TypeScript interfaces for AssignMint app
+// types/index.ts
+// Task is defined in firestore.ts — import it from there to avoid duplication.
+export { Task } from './firestore';
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  isExpert: boolean;
-  rating?: number;
-  completedTasks?: number;
-  totalEarnings?: number;
-  subjects?: string[];
-  bio?: string;
-  joinDate: Date;
-}
+// ─── Matching-system types (not in firestore.ts) ────────────────────────────
 
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  subject: string;
-  urgency: 'high' | 'medium' | 'low';
-  budget: number;
-  deadline: Date;
-  status: TaskStatus;
-  requesterId: string;
-  expertId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  attachments?: string[];
-  tags?: string[];
-  location?: string;
-  isUrgent: boolean;
-  isFeatured: boolean;
-  // New fields for matching system
-  ownerId: string; // Alias for requesterId
-  price: number; // Alias for budget
-  deadlineISO: string; // ISO string format
-  reservedBy?: string | null;
-  reservedUntil?: Date | null;
-  matching?: {
-    invitedNow: number;
-    nextWaveAt: Date;
-  };
-}
-
-export type TaskStatus =
-  | 'open'           // New: Available for experts to claim
-  | 'reserved'       // New: Soft-claimed by expert (15min window)
-  | 'claimed'        // New: Confirmed by expert
-  | 'submitted'      // Expert submitted work
-  | 'completed'      // Task completed and paid
-  | 'awaiting_expert'
-  | 'in_progress'
-  | 'pending_review'
-  | 'cancelled'
-  | 'disputed'
-  | 'working'
-  | 'delivered'
-  | 'payment_received'
-  | 'revision_requested';
-
-// New interface for the matching system
 export interface ExpertUser {
   uid: string;
   displayName: string;
@@ -83,6 +26,22 @@ export interface Invite {
   respondedAt?: Date | null;
   status: 'sent' | 'accepted' | 'declined';
   lastScore: number;
+}
+
+// ─── App-level types ─────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  isExpert: boolean;
+  rating?: number;
+  completedTasks?: number;
+  totalEarnings?: number;
+  subjects?: string[];
+  bio?: string;
+  joinDate: Date;
 }
 
 export interface Notification {
@@ -121,11 +80,8 @@ export interface TaskFilter {
   urgency?: string;
   minBudget?: number;
   maxBudget?: number;
-  status?: TaskStatus;
-  dateRange?: {
-    start: Date;
-    end: Date;
-  };
+  status?: string;
+  dateRange?: { start: Date; end: Date };
 }
 
 export interface NavigationProps {
@@ -137,20 +93,6 @@ export interface TabBarProps {
   state: any;
   descriptors: any;
   navigation: any;
-}
-
-export interface AppState {
-  user: User | null;
-  tasks: Task[];
-  notifications: Notification[];
-  wallet: Wallet;
-  isLoading: boolean;
-  error: string | null;
-  activeTab: string;
-  showWallet: boolean;
-  walletParams: any;
-  unreadNotifications: number;
-  isInitialized: boolean;
 }
 
 export interface ApiResponse<T> {
@@ -175,27 +117,6 @@ export interface FileUpload {
   size: number;
 }
 
-export interface TaskSubmission {
-  taskId: string;
-  files: FileUpload[];
-  message: string;
-  expertId: string;
-}
-
-export interface ExpertProfile {
-  userId: string;
-  subjects: string[];
-  hourlyRate: number;
-  rating: number;
-  totalReviews: number;
-  completedTasks: number;
-  totalEarnings: number;
-  availability: boolean;
-  bio: string;
-  certifications: string[];
-  portfolio: string[];
-}
-
 export interface ChatMessage {
   id: string;
   taskId: string;
@@ -205,53 +126,4 @@ export interface ChatMessage {
   timestamp: Date;
   isRead: boolean;
   attachments?: string[];
-}
-
-export interface TaskReview {
-  id: string;
-  taskId: string;
-  reviewerId: string;
-  revieweeId: string;
-  rating: number;
-  comment: string;
-  createdAt: Date;
-}
-
-export interface AppConfig {
-  name: string;
-  version: string;
-  description: string;
-  supportEmail: string;
-  websiteUrl: string;
-}
-
-export interface Theme {
-  colors: {
-    primary: string;
-    primaryLight: string;
-    primaryDark: string;
-    secondary: string;
-    secondaryLight: string;
-    secondaryDark: string;
-    success: string;
-    warning: string;
-    error: string;
-    info: string;
-    white: string;
-    black: string;
-    background: string;
-    cardBackground: string;
-    [key: string]: string;
-  };
-  fonts: {
-    sizes: {
-      [key: string]: number;
-    };
-    weights: {
-      [key: string]: string;
-    };
-  };
-  spacing: {
-    [key: string]: number;
-  };
 }

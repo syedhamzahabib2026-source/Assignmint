@@ -7,244 +7,185 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
-import { useStripe } from '@stripe/stripe-react-native';
-import Icon, { Icons } from '../components/common/Icon';
 import { COLORS } from '../constants';
-import API from '../lib/api';
-import { stripeService } from '../services/stripeService';
+import Icon, { Icons } from '../components/common/Icon';
 import { useAuth } from '../state/AuthProvider';
-import { STRIPE_ENABLED } from '../config/environment';
+import { firestoreService } from '../services/firestoreService';
+import { Task } from '../types/firestore';
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+const formatPrice = (price: number) => `$${price.toFixed(0)}`;
+
+const formatDeadline = (deadline: Date | any): string => {
+  if (!deadline) return 'No deadline';
+  const d = deadline instanceof Date ? deadline : (deadline.toDate?.() ?? new Date(deadline));
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const getUrgencyColor = (urgency: string) => {
+  if (urgency === 'high') return COLORS.error;
+  if (urgency === 'medium') return COLORS.warning;
+  return COLORS.success;
+};
+
+const getAILevelLabel = (level: number): { text: string; color: string } => {
+  if (level >= 67) return { text: 'High AI', color: COLORS.warning };
+  if (level >= 34) return { text: 'Medium AI', color: COLORS.primary };
+  return { text: 'Low AI', color: COLORS.success };
+};
+
+const getStatusConfig = (status: string): { label: string; color: string; bg: string } => {
+  switch (status) {
+    case 'open':        return { label: 'Open', color: COLORS.success, bg: '#34C75920' };
+    case 'in_progress': return { label: 'In Progress', color: COLORS.primary, bg: '#007AFF20' };
+    case 'completed':   return { label: 'Completed', color: COLORS.textSecondary, bg: COLORS.gray200 };
+    case 'cancelled':   return { label: 'Cancelled', color: COLORS.error, bg: '#FF3B3020' };
+    default:            return { label: status, color: COLORS.text, bg: COLORS.gray200 };
+  }
+};
+
+const filenameFromUrl = (url: string): string => {
+  try {
+    const decoded = decodeURIComponent(url);
+    const parts = decoded.split('/');
+    const last = parts[parts.length - 1].split('?')[0];
+    return last || 'File';
+  } catch {
+    return 'File';
+  }
+};
+
+// ─── component ──────────────────────────────────────────────────────────────
 
 const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
   const { taskId } = route.params || {};
   const { user, isGuestMode } = useAuth();
-  const { presentPaymentSheet, initPaymentSheet } = useStripe();
-  const [loading, setLoading] = useState(false);
-  const [task, setTask] = useState<any>(null);
-  const [isPaying, setIsPaying] = useState(false);
-
-  // Mock task data
-  const mockTask = {
-    id: taskId || '1',
-    title: 'Business Case Study Analysis',
-    description: 'Analyze the competitive landscape for a new tech startup and provide strategic recommendations for market entry. The analysis should include competitor analysis, market size estimation, and go-to-market strategy.',
-    budget: 500,
-    deadline: '2023-12-15',
-    subject: 'Business',
-    urgency: 'high',
-    aiLevel: 'assisted',
-    status: 'open',
-    postedBy: 'Sarah M.',
-    postedDate: '2023-11-20',
-    attachments: [
-      { name: 'Case Study Brief.pdf', size: '2.3 MB' },
-      { name: 'Market Data.xlsx', size: '1.1 MB' },
-    ],
-    requirements: [
-      'Minimum 15 pages',
-      'Include executive summary',
-      'Use APA formatting',
-      'Include 5+ sources',
-    ],
-    tags: ['Business Strategy', 'Market Analysis', 'Competitive Intelligence'],
-  };
+  const [task, setTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [accepting, setAccepting] = useState(false);
+  const [negotiating, setNegotiating] = useState(false);
 
   useEffect(() => {
-    const loadTask = async () => {
-      if (!taskId) return;
-      
-      try {
-        setLoading(true);
-        const response = await API.getTask(taskId);
-        console.log('📱 TaskDetails API response:', response);
-        setTask(response.task);
-      } catch (error: any) {
-        console.error('❌ Error loading task:', error);
-        Alert.alert('Error', 'Failed to load task details');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTask();
+    if (!taskId) {
+      setLoading(false);
+      return;
+    }
+    firestoreService.getTask(taskId)
+      .then(setTask)
+      .catch((err) => console.error('TaskDetailsScreen fetch error:', err))
+      .finally(() => setLoading(false));
   }, [taskId]);
 
-  const handleAccept = () => {
+  const requireAuth = (action: () => void) => {
     if (isGuestMode || !user) {
       Alert.alert(
         'Sign Up Required',
-        'You need to create an account to claim tasks. Sign up for free to access all features.',
+        'Create a free account to perform this action.',
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Sign Up',
-            onPress: () => navigation.navigate('Login'),
-          },
+          { text: 'Sign Up', onPress: () => navigation.navigate('Login') },
         ]
       );
       return;
     }
-
-    Alert.alert(
-      'Accept Task',
-      'Are you sure you want to accept this task?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Accept',
-          onPress: () => {
-            Alert.alert('Success', 'Task accepted! You can now start working on it.');
-            navigation.navigate('MyTasks');
-          },
-        },
-      ]
-    );
+    action();
   };
 
-  const handleNegotiate = () => {
-    if (isGuestMode || !user) {
+  const handleAccept = () => {
+    requireAuth(() => {
+      if (!task) return;
+      if (task.status !== 'open') {
+        Alert.alert('Not Available', 'This task is no longer open.');
+        return;
+      }
+      if (task.createdBy === user!.uid) {
+        Alert.alert('Cannot Accept', 'You cannot accept your own task.');
+        return;
+      }
       Alert.alert(
-        'Sign Up Required',
-        'You need to create an account to send messages. Sign up for free to chat with task owners.',
+        'Accept Task',
+        `Accept "${task.title}" for ${formatPrice(task.price)}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Sign Up',
-            onPress: () => navigation.navigate('Login'),
+            text: 'Accept',
+            onPress: async () => {
+              try {
+                setAccepting(true);
+                await firestoreService.updateTask(task.id, {
+                  status: 'in_progress',
+                  completedBy: user!.uid,
+                  completedByName: user!.displayName || user!.email || 'Unknown',
+                });
+                Alert.alert('Accepted!', 'You can now start working on this task.', [
+                  { text: 'OK', onPress: () => navigation.navigate('Tasks') },
+                ]);
+              } catch (err) {
+                console.error('Accept task error:', err);
+                Alert.alert('Error', 'Failed to accept task. Please try again.');
+              } finally {
+                setAccepting(false);
+              }
+            },
           },
         ]
       );
-      return;
-    }
-
-    navigation.navigate('ChatThread', {
-      chat: {
-        id: '1',
-        name: mockTask.postedBy,
-        taskTitle: mockTask.title,
-      },
     });
   };
 
-  const handleReport = () => {
-    Alert.alert(
-      'Report Task',
-      'What issue would you like to report?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Inappropriate Content', onPress: () => Alert.alert('Reported', 'Thank you for your report.') },
-        { text: 'Spam', onPress: () => Alert.alert('Reported', 'Thank you for your report.') },
-        { text: 'Other', onPress: () => Alert.alert('Reported', 'Thank you for your report.') },
-      ]
-    );
-  };
-
-  const handleShare = () => {
-    Alert.alert('Share', 'Sharing feature coming soon!');
-  };
-
-  const handlePayExpert = async () => {
-    if (isGuestMode || !user) {
-      Alert.alert(
-        'Sign Up Required',
-        'You need to create an account to make payments. Sign up for free to access payment features.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Sign Up',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ]
-      );
-      return;
-    }
-
-    try {
-      console.log('💳 Paying expert for task:', task?.id);
-      setIsPaying(true);
-
-      if (!task) {
-        Alert.alert('Error', 'Task information not available.');
+  const handleNegotiate = () => {
+    requireAuth(async () => {
+      if (!task) return;
+      if (task.createdBy === user!.uid) {
+        Alert.alert('Cannot Negotiate', 'This is your own task.');
         return;
       }
+      try {
+        setNegotiating(true);
+        const allChats = await firestoreService.getChats({ isActive: true });
+        const existing = allChats.find(
+          c => c.taskId === task.id && c.participants.includes(user!.uid)
+        );
 
-      // Check if Stripe is enabled and properly configured
-      if (!STRIPE_ENABLED) {
-        Alert.alert('Coming Soon', 'Payment integration is being set up. Please check back later.');
-        return;
-      }
-
-      if (!initPaymentSheet || !presentPaymentSheet) {
-        Alert.alert('Error', 'Payment system is not properly configured. Please try again later.');
-        return;
-      }
-
-      // Create PaymentIntent for task payment
-      const paymentIntent = await stripeService.createPaymentIntent({
-        amount: task.budget,
-        currency: 'usd',
-        metadata: {
-          type: 'task_payment',
-          taskId: task.id,
-          userId: user.uid,
-          expertId: task.expertId || 'unknown',
-        },
-      });
-
-      // Initialize payment sheet
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: 'AssignMint',
-        paymentIntentClientSecret: paymentIntent.client_secret,
-        allowsDelayedPaymentMethods: true,
-      });
-
-      if (initError) {
-        console.error('❌ Payment sheet init error:', initError);
-        Alert.alert('Error', 'Failed to initialize payment. Please try again.');
-        return;
-      }
-
-      // Present payment sheet
-      const { error: presentError } = await presentPaymentSheet();
-
-      if (presentError) {
-        console.error('❌ Payment sheet present error:', presentError);
-        if (presentError.code !== 'Canceled') {
-          Alert.alert('Error', 'Payment failed. Please try again.');
+        let chatId: string;
+        if (existing) {
+          chatId = existing.id;
+        } else {
+          chatId = await firestoreService.createChat({
+            taskId: task.id,
+            taskTitle: task.title,
+            participants: [user!.uid, task.createdBy],
+            participantNames: {
+              [user!.uid]: user!.displayName || user!.email || 'Unknown',
+              [task.createdBy]: task.createdByName,
+            },
+            isActive: true,
+          });
         }
-        return;
+
+        navigation.navigate('ChatThread', {
+          chat: { id: chatId, name: task.createdByName, taskTitle: task.title },
+        });
+      } catch (err) {
+        console.error('Negotiate error:', err);
+        Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      } finally {
+        setNegotiating(false);
       }
-
-      // Payment successful
-      Alert.alert(
-        'Payment Successful', 
-        `You've successfully paid $${task.budget} for this task. The expert will receive the payment once the task is completed.`,
-        [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              // Navigate back or update task status
-              navigation.goBack();
-            }
-          }
-        ]
-      );
-
-    } catch (error) {
-      console.error('❌ Error processing payment:', error);
-      Alert.alert('Error', 'Failed to process payment. Please try again.');
-    } finally {
-      setIsPaying(false);
-    }
+    });
   };
+
+  // ─── loading ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Icon name={Icons.loading} size={32} color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading task details...</Text>
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.stateText}>Loading task...</Text>
         </View>
       </SafeAreaView>
     );
@@ -253,153 +194,210 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
   if (!task) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Icon name={Icons.error} size={64} color={COLORS.error} />
-          <Text style={styles.errorTitle}>Task Not Found</Text>
-          <Text style={styles.errorText}>The requested task could not be found.</Text>
-          <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.errorButtonText}>Go Back</Text>
+        <TouchableOpacity style={styles.backButtonAlone} onPress={() => navigation.goBack()}>
+          <Icon name={Icons.arrowBack} size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <View style={styles.centeredState}>
+          <Icon name={Icons.error} size={56} color={COLORS.error} />
+          <Text style={styles.stateTitle}>Task Not Found</Text>
+          <Text style={styles.stateText}>This task may have been removed.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.retryButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  const statusConfig = getStatusConfig(task.status);
+  const aiLabel = getAILevelLabel(task.aiLevel);
+  const isOwner = user?.uid === task.createdBy;
+  const canAct = task.status === 'open' && !isOwner;
+
+  // ─── render ───────────────────────────────────────────────────────────────
+
   return (
-    <SafeAreaView style={styles.container} testID="taskDetails.screen">
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
           <Icon name={Icons.arrowBack} size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Task Details</Text>
-        <TouchableOpacity style={styles.moreButton} onPress={handleReport}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() =>
+            Alert.alert('Report Task', 'What issue would you like to report?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Inappropriate Content', onPress: () => Alert.alert('Reported', 'Thank you.') },
+              { text: 'Spam', onPress: () => Alert.alert('Reported', 'Thank you.') },
+            ])
+          }
+        >
           <Icon name={Icons.more} size={24} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Task Header */}
-        <View style={styles.taskHeader}>
-          <View style={styles.subjectBadge}>
-            <Text style={styles.subjectBadgeText}>{task.subject}</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Badges row */}
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, { backgroundColor: statusConfig.bg }]}>
+            <Text style={[styles.badgeText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
           </View>
-          <Text style={styles.taskTitle}>{task.title}</Text>
-          <Text style={styles.taskDescription}>{task.description}</Text>
+          <View style={[styles.badge, { backgroundColor: '#007AFF20' }]}>
+            <Text style={[styles.badgeText, { color: COLORS.primary }]}>{task.subject}</Text>
+          </View>
         </View>
 
-        {/* Task Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
+        {/* Title */}
+        <Text style={styles.title}>{task.title}</Text>
+
+        {/* Posted by */}
+        <View style={styles.postedRow}>
+          <View style={styles.avatar}>
+            <Icon name={Icons.user} size={18} color={COLORS.textSecondary} />
+          </View>
+          <View>
+            <Text style={styles.postedBy}>{task.createdByName}</Text>
+            {task.createdAt && (
+              <Text style={styles.postedDate}>
+                Posted {formatDeadline(task.createdAt)}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Description */}
+        {!!task.description && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.description}>{task.description}</Text>
+          </View>
+        )}
+
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
             <Icon name={Icons.money} size={20} color={COLORS.success} />
             <Text style={styles.statLabel}>Budget</Text>
-            <Text style={styles.statValue}>${task.budget}</Text>
+            <Text style={[styles.statValue, { color: COLORS.success }]}>
+              {formatPrice(task.price)}
+            </Text>
           </View>
-          <View style={styles.statItem}>
+          <View style={styles.statCard}>
             <Icon name={Icons.time} size={20} color={COLORS.warning} />
             <Text style={styles.statLabel}>Deadline</Text>
-            <Text style={styles.statValue}>{task.deadline}</Text>
+            <Text style={styles.statValue}>{formatDeadline(task.deadline)}</Text>
           </View>
-          <View style={styles.statItem}>
-            <Icon name={Icons.flash} size={20} color={COLORS.primary} />
+          <View style={styles.statCard}>
+            <Icon name={Icons.flash} size={20} color={getUrgencyColor(task.urgency)} />
             <Text style={styles.statLabel}>Urgency</Text>
-            <Text style={styles.statValue}>{task.urgency}</Text>
+            <Text style={[styles.statValue, { color: getUrgencyColor(task.urgency) }]}>
+              {task.urgency.charAt(0).toUpperCase() + task.urgency.slice(1)}
+            </Text>
           </View>
         </View>
 
-        {/* Requirements */}
+        {/* AI Level */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Requirements</Text>
-          {task.requirements.map((req: string, index: number) => (
-            <View key={index} style={styles.requirementItem}>
-              <Icon name={Icons.checkmark} size={16} color={COLORS.success} />
-              <Text style={styles.requirementText}>{req}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Attachments */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attachments</Text>
-          {task.attachments.map((file: any, index: number) => (
-            <View key={index} style={styles.attachmentItem}>
-              <Icon name={Icons.document} size={20} color={COLORS.primary} />
-              <View style={styles.attachmentInfo}>
-                <Text style={styles.attachmentName}>{file.name}</Text>
-                <Text style={styles.attachmentSize}>{file.size}</Text>
-              </View>
-              <TouchableOpacity style={styles.downloadButton}>
-                <Icon name={Icons.download} size={16} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-          ))}
+          <Text style={styles.sectionTitle}>AI Assistance</Text>
+          <View style={styles.aiRow}>
+            <Icon name={Icons.ai} size={20} color={aiLabel.color} />
+            <Text style={[styles.aiText, { color: aiLabel.color }]}>{aiLabel.text}</Text>
+            <Text style={styles.aiSubtext}>({task.aiLevel}% AI involvement allowed)</Text>
+          </View>
         </View>
 
         {/* Tags */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tags</Text>
-          <View style={styles.tagsContainer}>
-            {task.tags.map((tag: string, index: number) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
+        {task.tags && task.tags.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tags</Text>
+            <View style={styles.tagsWrap}>
+              {task.tags.map((tag, i) => (
+                <View key={i} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* File Attachments */}
+        {task.fileUrls && task.fileUrls.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Attachments ({task.fileUrls.length})</Text>
+            {task.fileUrls.map((url, i) => (
+              <View key={i} style={styles.fileItem}>
+                <Icon name={Icons.document} size={20} color={COLORS.primary} />
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {filenameFromUrl(url)}
+                </Text>
               </View>
             ))}
           </View>
+        )}
+
+        {/* Matching info */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Matching</Text>
+          <Text style={styles.matchingText}>
+            {task.matchingType === 'auto'
+              ? 'Auto-assigned — AssignMint will match an expert'
+              : 'Manual — open for experts to apply'}
+          </Text>
         </View>
 
-        {/* Posted Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Posted by</Text>
-          <View style={styles.postedInfo}>
-            <View style={styles.userAvatar}>
-              <Icon name={Icons.user} size={24} color={COLORS.textSecondary} />
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{task.postedBy}</Text>
-              <Text style={styles.postedDate}>Posted on {task.postedDate}</Text>
-            </View>
-          </View>
-        </View>
+        <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Action Buttons */}
-      <View style={styles.actionContainer}>
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Icon name={Icons.share} size={20} color={COLORS.textSecondary} />
-        </TouchableOpacity>
+      {/* Action bar */}
+      <View style={styles.actionBar}>
+        {isOwner ? (
+          <View style={styles.ownerNote}>
+            <Icon name={Icons.info} size={18} color={COLORS.textSecondary} />
+            <Text style={styles.ownerNoteText}>This is your task</Text>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.negotiateBtn, !canAct && styles.disabledBtn]}
+              onPress={handleNegotiate}
+              disabled={negotiating || !canAct}
+            >
+              {negotiating ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <Text style={[styles.actionBtnText, styles.negotiateBtnText]}>
+                  Negotiate
+                </Text>
+              )}
+            </TouchableOpacity>
 
-        <View style={styles.mainActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.negotiateButton]}
-            onPress={handleNegotiate}
-          >
-            <Text style={styles.negotiateButtonText}>Negotiate</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.acceptButton]}
-            onPress={handleAccept}
-          >
-            <Text style={styles.acceptButtonText}>Accept Task</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.payButton]}
-            onPress={handlePayExpert}
-            disabled={isPaying}
-          >
-            <Text style={styles.payButtonText}>
-              {isPaying ? 'Processing...' : `Pay $${task?.budget || 0}`}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.acceptBtn, !canAct && styles.disabledBtn]}
+              onPress={handleAccept}
+              disabled={accepting || !canAct}
+            >
+              {accepting ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Text style={[styles.actionBtnText, styles.acceptBtnText]}>
+                  {task.status === 'open' ? 'Accept Task' : statusConfig.label}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
 };
+
+// ─── styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -408,259 +406,251 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  backButton: {
+  headerButton: {
     padding: 8,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: COLORS.text,
   },
-  moreButton: {
-    padding: 8,
-  },
-  content: {
+  scroll: {
     flex: 1,
-    paddingHorizontal: 20,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  scrollContent: {
+    padding: 20,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: COLORS.textSecondary,
-  },
-  errorContainer: {
+  centeredState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    gap: 12,
   },
-  errorTitle: {
+  stateTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: COLORS.text,
-    marginTop: 16,
-    marginBottom: 8,
   },
-  errorText: {
-    fontSize: 16,
+  stateText: {
+    fontSize: 15,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
   },
-  errorButton: {
+  retryButton: {
+    marginTop: 8,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
   },
-  errorButtonText: {
+  retryButtonText: {
     color: COLORS.white,
-    fontSize: 16,
     fontWeight: '600',
+    fontSize: 15,
   },
-  taskHeader: {
-    marginTop: 20,
-    marginBottom: 24,
-  },
-  subjectBadge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  subjectBadgeText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  taskTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  taskDescription: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    lineHeight: 24,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
+  backButtonAlone: {
     padding: 16,
-    borderRadius: 12,
-    marginHorizontal: 4,
   },
-  statLabel: {
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+  },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  badgeText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 8,
-    marginBottom: 4,
+    fontWeight: '600',
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
     color: COLORS.text,
+    marginBottom: 14,
+    lineHeight: 32,
+  },
+  postedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 24,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.gray100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  postedBy: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  postedDate: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  requirementItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  requirementText: {
-    fontSize: 14,
-    color: COLORS.text,
-    marginLeft: 8,
-  },
-  attachmentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  attachmentInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  attachmentName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
-  },
-  attachmentSize: {
-    fontSize: 12,
+  description: {
+    fontSize: 15,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    lineHeight: 22,
   },
-  downloadButton: {
-    padding: 8,
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
   },
-  tagsContainer: {
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  aiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    padding: 14,
+  },
+  aiText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  aiSubtext: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  tagsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
   },
   tag: {
     backgroundColor: COLORS.gray100,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    marginRight: 8,
-    marginBottom: 8,
   },
   tagText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.text,
+    fontWeight: '500',
   },
-  postedInfo: {
+  fileItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.surface,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.gray100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  userInfo: {
+  fileName: {
+    fontSize: 14,
+    color: COLORS.text,
     flex: 1,
   },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  postedDate: {
+  matchingText: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    lineHeight: 20,
   },
-  actionContainer: {
+  bottomPadding: {
+    height: 20,
+  },
+  actionBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  shareButton: {
-    padding: 12,
-    marginRight: 12,
-  },
-  mainActions: {
+  actionBtn: {
     flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
+    paddingVertical: 15,
+    borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 2,
-    marginVertical: 4,
-    minWidth: 100,
+    justifyContent: 'center',
   },
-  negotiateButton: {
+  negotiateBtn: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
   },
-  acceptButton: {
+  acceptBtn: {
     backgroundColor: COLORS.primary,
   },
-  negotiateButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
+  disabledBtn: {
+    opacity: 0.4,
   },
-  acceptButtonText: {
+  actionBtnText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  negotiateBtnText: {
+    color: COLORS.primary,
+  },
+  acceptBtnText: {
     color: COLORS.white,
   },
-  payButton: {
-    backgroundColor: COLORS.success,
+  ownerNote: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  payButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.white,
+  ownerNoteText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
 });
 

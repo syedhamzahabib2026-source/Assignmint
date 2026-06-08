@@ -141,10 +141,8 @@ function calculatePriceFit(task: Task, expert: ExpertUser): number {
 }
 
 function calculateDeadlineFit(task: Task, expert: ExpertUser): number {
-  // For now, assume experts can deliver within 24 hours
-  // In a real system, this would be based on expert's "deliverInHours" field
   const now = new Date();
-  const deadline = new Date(task.deadlineISO);
+  const deadline = task.deadline instanceof Date ? task.deadline : new Date(task.deadline as any);
   const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
   
   // Assume expert needs at least 2 hours to deliver

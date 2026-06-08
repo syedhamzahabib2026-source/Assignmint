@@ -24,86 +24,131 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [acceptingIds, setAcceptingIds] = useState<Set<string>>(new Set());
+  const [negotiatingIds, setNegotiatingIds] = useState<Set<string>>(new Set());
   const { user, logout } = useAuth();
 
-  const handleAccept = async (task: Task) => {
+  const handleAccept = (task: Task) => {
     if (!user) {
-      Alert.alert('Authentication Required', 'Please sign in to accept tasks.');
+      Alert.alert('Sign In Required', 'Please sign in to accept tasks.');
       return;
     }
-    
+    if (task.createdBy === user.uid) {
+      Alert.alert('Not Allowed', 'You cannot accept your own task.');
+      return;
+    }
+    if (task.status !== 'open') {
+      Alert.alert('No Longer Available', 'This task has already been taken.');
+      return;
+    }
+    if (acceptingIds.has(task.id)) return;
+
+    Alert.alert(
+      'Accept Task',
+      `Accept "${task.title}" for $${task.price.toFixed(0)}?\n\nYou'll be responsible for delivering this task by the deadline.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: () => confirmAccept(task),
+        },
+      ]
+    );
+  };
+
+  const confirmAccept = async (task: Task) => {
+    setAcceptingIds(prev => new Set(prev).add(task.id));
     try {
-      // Update task with accepted user
       await firestoreService.updateTask(task.id, {
         status: 'in_progress',
-        completedBy: user.uid,
-        completedByName: user.displayName || user.email || 'Unknown User',
+        completedBy: user!.uid,
+        completedByName: user!.displayName || user!.email || 'Unknown User',
         acceptedAt: new Date(),
       });
-      
-      // Send notification to task creator
-      await fcmService.sendTaskNotification(
-        task.createdBy,
-        task.id,
-        'taskAccepted',
+
+      // Notify task creator — failure here must not surface as an accept error
+      try {
+        await fcmService.sendTaskNotification(
+          task.createdBy,
+          task.id,
+          'taskAccepted',
+          'Task Accepted!',
+          `${user!.displayName || user!.email} accepted your task: ${task.title}`
+        );
+      } catch (notifErr) {
+        console.warn('⚠️ Notification failed (accept still succeeded):', notifErr);
+      }
+
+      Alert.alert(
         'Task Accepted!',
-        `${user.displayName || user.email} has accepted your task: ${task.title}`
+        `You're now working on "${task.title}". Head to My Tasks to track it.`,
+        [
+          { text: 'View My Tasks', onPress: () => navigation.navigate('TasksStack') },
+          { text: 'Stay Here' },
+        ]
       );
-      
-      Alert.alert('Success', 'Task accepted successfully!');
     } catch (error) {
       console.error('❌ Error accepting task:', error);
       Alert.alert('Error', 'Failed to accept task. Please try again.');
+    } finally {
+      setAcceptingIds(prev => {
+        const next = new Set(prev);
+        next.delete(task.id);
+        return next;
+      });
     }
   };
 
   const handleNegotiate = async (task: Task) => {
     if (!user) {
-      Alert.alert('Authentication Required', 'Please sign in to start a conversation.');
+      Alert.alert('Sign In Required', 'Please sign in to start a conversation.');
       return;
     }
-    
+    if (task.createdBy === user.uid) {
+      Alert.alert('Not Allowed', 'You cannot negotiate on your own task.');
+      return;
+    }
+    if (negotiatingIds.has(task.id)) return;
+
+    setNegotiatingIds(prev => new Set(prev).add(task.id));
     try {
-      // Check if chat already exists for this task
+      // Re-use an existing chat for this task+user pair if one exists
       const existingChats = await firestoreService.getChats({
         taskId: task.id,
-        participants: [user.uid, task.createdBy],
         isActive: true,
       });
-      
-      let chatId: string;
-      
-      if (existingChats.length > 0) {
-        chatId = existingChats[0].id;
-      } else {
-        // Create new chat
-        chatId = await firestoreService.createChat({
-          taskId: task.id,
-          taskTitle: task.title,
-          participants: [user.uid, task.createdBy],
-          participantNames: {
-            [user.uid]: user.displayName || user.email || 'Unknown User',
-            [task.createdBy]: task.createdByName,
-          },
-          isActive: true,
-        });
-      }
-      
+      const existing = existingChats.find(c => c.participants.includes(user.uid));
+
+      const chatId = existing
+        ? existing.id
+        : await firestoreService.createChat({
+            taskId: task.id,
+            taskTitle: task.title,
+            participants: [user.uid, task.createdBy],
+            participantNames: {
+              [user.uid]: user.displayName || user.email || 'Unknown User',
+              [task.createdBy]: task.createdByName,
+            },
+            isActive: true,
+          });
+
       navigation.navigate('ChatThread', {
-        chat: {
-          id: chatId,
-          name: task.createdByName,
-          taskTitle: task.title,
-        },
+        chat: { id: chatId, name: task.createdByName, taskTitle: task.title },
       });
     } catch (error) {
-      console.error('❌ Error creating chat:', error);
+      console.error('❌ Error opening chat:', error);
       Alert.alert('Error', 'Failed to start conversation. Please try again.');
+    } finally {
+      setNegotiatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(task.id);
+        return next;
+      });
     }
   };
 
   const handleViewTask = (task: Task) => {
-    navigation.navigate('HomeStack', { screen: 'TaskDetails', params: { taskId: task.id } });
+    navigation.navigate('TaskDetails', { taskId: task.id });
   };
 
   const handleLogout = async () => {
@@ -256,9 +301,9 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         ) : (
           tasks.map((task) => (
             <TouchableOpacity
-              key={task.taskId}
+              key={task.id}
               style={styles.taskCard}
-              onPress={() => navigation.navigate('HomeStack', { screen: 'TaskDetails', params: { taskId: task.taskId } })}
+              onPress={() => navigation.navigate('TaskDetails', { taskId: task.id })}
             >
               <View style={styles.userHeader}>
                 <View style={styles.userInfo}>
@@ -266,7 +311,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     <Icon name={Icons.user} size={24} color={COLORS.textSecondary} />
                   </View>
                   <View style={styles.userDetails}>
-                    <Text style={styles.userName}>{task.ownerName ?? 'Unknown'}</Text>
+                    <Text style={styles.userName}>{task.createdByName ?? 'Unknown'}</Text>
                     <Text style={styles.taskType}>offering {task.subject ?? ''} Task</Text>
                   </View>
                 </View>
@@ -291,7 +336,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Deadline:</Text>
-                  <Text style={styles.detailValue}>{formatDate(task.deadlineISO ?? task.deadline)}</Text>
+                  <Text style={styles.detailValue}>{formatDate(task.deadline)}</Text>
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>AI Assistance:</Text>
@@ -309,24 +354,46 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               </View>
 
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.acceptButton]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleAccept(task);
-                  }}
-                >
-                  <Text style={styles.acceptButtonText}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.negotiateButton]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleNegotiate(task);
-                  }}
-                >
-                  <Text style={styles.negotiateButtonText}>Negotiate</Text>
-                </TouchableOpacity>
+                {task.createdBy !== user?.uid && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      styles.acceptButton,
+                      acceptingIds.has(task.id) && styles.acceptButtonBusy,
+                    ]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleAccept(task);
+                    }}
+                    disabled={acceptingIds.has(task.id)}
+                  >
+                    {acceptingIds.has(task.id) ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.acceptButtonText}>Accept</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+                {task.createdBy !== user?.uid && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      styles.negotiateButton,
+                      negotiatingIds.has(task.id) && styles.negotiateButtonBusy,
+                    ]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleNegotiate(task);
+                    }}
+                    disabled={negotiatingIds.has(task.id)}
+                  >
+                    {negotiatingIds.has(task.id) ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.negotiateButtonText}>Negotiate</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={[styles.actionButton, styles.bestDealButton]}
                   onPress={(e) => {
@@ -530,8 +597,14 @@ const styles = StyleSheet.create({
   acceptButton: {
     backgroundColor: '#34C759',
   },
+  acceptButtonBusy: {
+    backgroundColor: '#34C75980',
+  },
   negotiateButton: {
     backgroundColor: '#FF9500',
+  },
+  negotiateButtonBusy: {
+    backgroundColor: '#FF950080',
   },
   bestDealButton: {
     backgroundColor: '#007AFF',

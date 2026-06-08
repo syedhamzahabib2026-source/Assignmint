@@ -31,22 +31,25 @@ export interface Task {
   deadline: Date;
   createdAt: Date;
   updatedAt: Date;
-  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'open' | 'reserved' | 'claimed' | 'in_progress' | 'submitted' | 'completed' | 'cancelled';
   urgency: 'low' | 'medium' | 'high';
   aiLevel: number;
-  createdBy: string; // User ID
+  createdBy: string;
   createdByName: string;
-  completedBy?: string; // User ID
+  completedBy?: string;
   completedByName?: string;
   fileUrls: string[];
   tags: string[];
   specialInstructions?: string;
   estimatedHours?: number;
   matchingType: 'manual' | 'auto';
-  autoMatch: boolean; // New field for auto-matching
-  assignedExpert?: string; // User ID of auto-assigned expert
-  assignedExpertName?: string; // Name of auto-assigned expert
-  applicants: string[]; // User IDs
+  autoMatch: boolean;
+  assignedExpert?: string;
+  assignedExpertName?: string;
+  applicants: string[];
+  reservedBy?: string | null;
+  reservedUntil?: Date | null;
+  matching?: { invitedNow: number; nextWaveAt: Date };
   acceptedAt?: Date;
   completedAt?: Date;
   cancelledAt?: Date;
