@@ -1,3 +1,4 @@
+import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { auth } from './firebase';
 
 export interface SessionUser {
@@ -13,11 +14,11 @@ export async function ensureSignedInDev(): Promise<string | null> {
   return new Promise((resolve) => {
     // Add a small delay to ensure Firebase Auth is fully initialized
     setTimeout(() => {
-      const unsub = auth().onAuthStateChanged(async (u) => {
+      const unsub = auth().onAuthStateChanged(async (u: FirebaseAuthTypes.User | null) => {
         if (u) { resolve(await u.getIdToken()); unsub(); return; }
         auth().signInWithEmailAndPassword('dev@assignmint.com', 'devpassword123')
-          .then(async c => resolve(await c.user.getIdToken()))
-          .catch(e => { console.error('Dev sign-in failed:', e); resolve(null); })
+          .then(async (c: FirebaseAuthTypes.UserCredential) => resolve(await c.user.getIdToken()))
+          .catch((e: unknown) => { console.error('Dev sign-in failed:', e); resolve(null); })
           .finally(() => unsub());
       });
     }, 100); // 100ms delay
@@ -70,7 +71,7 @@ export const session = {
 
   // Listen to auth state changes
   onAuthStateChanged(callback: (user: SessionUser | null) => void): () => void {
-    return auth().onAuthStateChanged((user) => {
+    return auth().onAuthStateChanged((user: FirebaseAuthTypes.User | null) => {
       if (user) {
         currentUser = {
           uid: user.uid,

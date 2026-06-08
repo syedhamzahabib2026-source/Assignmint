@@ -1,3 +1,4 @@
+import firebaseAuth from '@react-native-firebase/auth';
 import { auth } from './firebase';
 import { createUserDocument } from './auth';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
@@ -9,14 +10,14 @@ import { Platform } from 'react-native';
 export const signInWithApple = async () => {
   try {
     // Check if Apple Sign-In is available
-    const isAvailable = await appleAuth.isAvailable;
+    const isAvailable = appleAuth.isSupported;
     
     if (!isAvailable) {
       throw new Error('Apple Sign-In is not available on this device');
     }
 
     // Check if we're on simulator (Apple Sign-In doesn't work on simulator)
-    if (Platform.OS === 'ios' && !Platform.isPad && !Platform.isTVOS) {
+    if (Platform.OS === 'ios' && !Platform.isPad && !Platform.isTV) {
       // This is a basic check - in real implementation you'd check if it's simulator
       console.warn('Apple Sign-In may not work properly on iOS Simulator');
     }
@@ -38,11 +39,7 @@ export const signInWithApple = async () => {
         throw new Error('No identity token received from Apple');
       }
 
-      const provider = new auth.OAuthProvider('apple.com');
-      const credential = provider.credential({
-        idToken: identityToken,
-        rawNonce: undefined, // We're not using nonce for simplicity
-      });
+      const credential = firebaseAuth.AppleAuthProvider.credential(identityToken);
 
       // Sign in to Firebase
       const userCredential = await auth().signInWithCredential(credential);
@@ -73,7 +70,7 @@ export const signInWithApple = async () => {
     console.error('Apple sign-in error:', error);
     
     // Provide more helpful error messages
-    if (error.message?.includes('1000') || error.message?.includes('1001')) {
+    if ((error as Error).message?.includes('1000') || (error as Error).message?.includes('1001')) {
       throw new Error('Apple Sign-In is not available on iOS Simulator. Please test on a physical device.');
     }
     

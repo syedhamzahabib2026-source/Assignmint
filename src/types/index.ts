@@ -1,6 +1,6 @@
 // types/index.ts
 // Task is defined in firestore.ts — import it from there to avoid duplication.
-export { Task } from './firestore';
+export type { Task } from './firestore';
 
 // ─── Matching-system types (not in firestore.ts) ────────────────────────────
 

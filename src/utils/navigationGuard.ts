@@ -67,7 +67,6 @@ export const NAVIGATOR_ROUTES = {
     ROUTES.CHAT_THREAD,
     ROUTES.NOTIFICATIONS,
     ROUTES.MESSAGES,
-    ROUTES.NAVIGATION_TEST,
   ],
   PostStack: [
     ROUTES.POST,
@@ -104,6 +103,6 @@ export const NAVIGATOR_ROUTES = {
   ],
 } as const;
 
-export const getNavigatorRoutes = (navigatorName: keyof typeof NAVIGATOR_ROUTES): string[] => {
+export const getNavigatorRoutes = (navigatorName: keyof typeof NAVIGATOR_ROUTES): readonly string[] => {
   return NAVIGATOR_ROUTES[navigatorName] || [];
 };

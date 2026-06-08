@@ -237,7 +237,7 @@ const StepOne: React.FC<StepOneProps> = ({ navigation, route }) => {
             <TextInput
               style={[
                 styles.titleInput,
-                validationErrors.taskTitle && styles.inputError,
+                !!validationErrors.taskTitle && styles.inputError,
               ]}
               placeholder="e.g., Help with calculus homework"
               placeholderTextColor={COLORS.textSecondary}
@@ -265,8 +265,8 @@ const StepOne: React.FC<StepOneProps> = ({ navigation, route }) => {
             <TouchableOpacity
               style={[
                 styles.subjectPicker,
-                selectedSubject && styles.subjectPickerSelected,
-                validationErrors.selectedSubject && styles.inputError,
+                !!selectedSubject && styles.subjectPickerSelected,
+                !!validationErrors.selectedSubject && styles.inputError,
               ]}
               onPress={() => {
                 try {
@@ -302,7 +302,7 @@ const StepOne: React.FC<StepOneProps> = ({ navigation, route }) => {
                 <TextInput
                   style={[
                     styles.customSubjectInput,
-                    validationErrors.customSubject && styles.inputError,
+                    !!validationErrors.customSubject && styles.inputError,
                   ]}
                   placeholder="Type your custom subject..."
                   placeholderTextColor={COLORS.textSecondary}

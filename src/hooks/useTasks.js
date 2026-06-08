@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import TaskService from '../services/TaskService';
+import TaskService from '../services/taskService';
 
 export const useTasks = (role) => {
   const [tasks, setTasks] = useState([]);

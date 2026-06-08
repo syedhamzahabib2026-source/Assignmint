@@ -26,7 +26,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [userData, setUserData] = useState<User | null>(null);
   const [walletData, setWalletData] = useState<any>(null);
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Load user data from Firestore
@@ -455,7 +455,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </View>
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{userData?.displayName || userData?.email || 'User'}</Text>
-            <Text style={styles.userTitle}>{userData?.title || 'User'}</Text>
+            <Text style={styles.userTitle}>{userData?.role || 'User'}</Text>
             <View style={styles.trustScoreContainer}>
               <Text style={styles.trustScoreLabel}>Trust Score:</Text>
               <Text style={styles.trustScore}>{userData?.trustScore || 0}%</Text>

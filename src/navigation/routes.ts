@@ -73,8 +73,7 @@ export const PROFILE_ROUTES = {
 export const TAB_NAMES = {
   HOME: 'HomeStack',
   POST: 'PostStack',
-  MY_TASKS: 'MyTasksStack',
-  NOTIFICATIONS: 'NotificationsStack',
+  MY_TASKS: 'TasksStack',
   PROFILE: 'ProfileStack',
 } as const;
 
@@ -84,8 +83,7 @@ export const STACK_NAMES = {
   MAIN_TABS: 'MainTabs',
   HOME: 'HomeStack',
   POST: 'PostStack',
-  MY_TASKS: 'MyTasksStack',
-  NOTIFICATIONS: 'NotificationsStack',
+  MY_TASKS: 'TasksStack',
   PROFILE: 'ProfileStack',
 } as const;
 

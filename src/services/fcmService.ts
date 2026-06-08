@@ -1,21 +1,12 @@
-// src/services/fcmService.ts
 import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import { firestoreService } from './firestoreService';
-import { auth, messagingService } from '../lib/firebase';
-import Config from 'react-native-config';
+import { auth, messaging } from '../lib/firebase';
 
 class FCMService {
   private fcmToken: string | null = null;
 
   async initialize(): Promise<void> {
-    if (!messagingService) {
-      console.log('⚠️ Firebase Messaging not available in React Native - use Expo Notifications instead');
-      console.log('TODO: Integrate Expo Notifications for push notifications');
-      return;
-    }
-
     try {
-      // Request permission for Android
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
@@ -26,19 +17,15 @@ class FCMService {
         }
       }
 
-      // Get FCM token
-      const token = await getToken(messagingService, {
-        vapidKey: Config.FB_VAPID_KEY || 'your-vapid-key', // You'll need to add this to your .env
-      });
+      const token = await messaging().getToken();
       this.fcmToken = token;
       console.log('FCM Token:', token);
 
-      // Save token to user profile
-      if (auth.currentUser) {
-        await this.saveTokenToUser(auth.currentUser.uid, token);
+      const currentUser = auth().currentUser;
+      if (currentUser) {
+        await this.saveTokenToUser(currentUser.uid, token);
       }
 
-      // Set up message handlers
       this.setupMessageHandlers();
     } catch (error) {
       console.error('FCM initialization failed:', error);
@@ -47,10 +34,7 @@ class FCMService {
 
   async saveTokenToUser(userId: string, token: string): Promise<void> {
     try {
-      await firestoreService.updateUser(userId, {
-        fcmToken: token,
-      } as any);
-      console.log('FCM token saved to user profile');
+      await firestoreService.updateUser(userId, { fcmToken: token } as any);
     } catch (error) {
       console.error('Failed to save FCM token:', error);
     }
@@ -58,13 +42,8 @@ class FCMService {
 
   async getToken(): Promise<string | null> {
     if (this.fcmToken) return this.fcmToken;
-    
-    if (!messagingService) return null;
-    
     try {
-      const token = await getToken(messagingService, {
-        vapidKey: Config.FB_VAPID_KEY || 'your-vapid-key',
-      });
+      const token = await messaging().getToken();
       this.fcmToken = token;
       return token;
     } catch (error) {
@@ -74,42 +53,16 @@ class FCMService {
   }
 
   private setupMessageHandlers(): void {
-    if (!messagingService) return;
-
-    // Handle foreground messages
-    onMessage(messagingService, (payload) => {
-      console.log('Foreground message received:', payload);
-      
-      // Show local notification for foreground messages
-      if (payload.notification) {
+    messaging().onMessage(async (remoteMessage: any) => {
+      console.log('Foreground message received:', remoteMessage);
+      if (remoteMessage.notification) {
         Alert.alert(
-          payload.notification.title || 'New Notification',
-          payload.notification.body || '',
-          [
-            { text: 'OK', onPress: () => {} },
-          ]
+          remoteMessage.notification.title || 'New Notification',
+          remoteMessage.notification.body || '',
+          [{ text: 'OK' }]
         );
       }
     });
-
-    // Note: Background message handling and notification tap handling
-    // are not available in the Web SDK. These would need to be handled
-    // through service workers in a web environment or through native
-    // notification handling in React Native.
-    console.log('Message handlers set up (foreground only)');
-  }
-
-  private handleNotificationTap(remoteMessage: any): void {
-    // Handle navigation based on notification data
-    const data = remoteMessage.data;
-    
-    if (data?.taskId) {
-      // Navigate to task details
-      console.log('Navigate to task:', data.taskId);
-    } else if (data?.chatId) {
-      // Navigate to chat
-      console.log('Navigate to chat:', data.chatId);
-    }
   }
 
   async sendNotificationToUser(
@@ -119,8 +72,6 @@ class FCMService {
     data?: { [key: string]: string }
   ): Promise<void> {
     try {
-      // This would typically be done via Cloud Functions
-      // For now, we'll create a notification document
       await firestoreService.createNotification({
         userId,
         type: 'system',

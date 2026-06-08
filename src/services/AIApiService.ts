@@ -96,8 +96,9 @@ class AIApiService {
       throw new Error('User not authenticated');
     }
 
-    this.authToken = await user.getIdToken();
-    return this.authToken;
+    const token = await user.getIdToken();
+    this.authToken = token;
+    return token;
   }
 
   private async makeRequest<T>(

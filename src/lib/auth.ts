@@ -63,9 +63,10 @@ export const signUpEmail = async (
   }, { merge: true });
   
   // Non-blocking operations (Storage seeds)
-  const nonBlockingOps = [
-    storage().ref(`users/${user.uid}/hello.txt`).putString('Hi', 'raw'),
-  ];
+  const storageInstance = storage() as any;
+  const nonBlockingOps = storageInstance
+    ? [storageInstance.ref(`users/${user.uid}/hello.txt`).putString('Hi', 'raw')]
+    : [];
   await Promise.allSettled(nonBlockingOps);
   
   return {

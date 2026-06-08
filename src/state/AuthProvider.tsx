@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const unsubscribe = authInstance.onAuthStateChanged(async (firebaseUser) => {
+      const unsubscribe = authInstance.onAuthStateChanged(async (firebaseUser: FirebaseAuthTypes.User | null) => {
         if (firebaseUser) {
           setUser(firebaseUser);
           setMode('auth');

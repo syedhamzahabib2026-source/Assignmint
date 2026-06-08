@@ -32,7 +32,6 @@ export function AppTabs() {
 
   return (
     <Tab.Navigator
-      testID="app-tabs"
       screenOptions={({ route }) => ({
         headerShown: false, // Hide headers as they're handled by stack navigators
         tabBarShowLabel: true,
@@ -66,7 +65,6 @@ export function AppTabs() {
         component={HomeStack}
         options={{
           tabBarLabel: 'Home',
-          tabBarTestID: 'tab.home',
         }}
       />
       <Tab.Screen
@@ -74,7 +72,6 @@ export function AppTabs() {
         component={PostStack}
         options={{
           tabBarLabel: 'Post',
-          tabBarTestID: 'tab.post',
         }}
       />
       <Tab.Screen
@@ -82,7 +79,6 @@ export function AppTabs() {
         component={TasksStack}
         options={{
           tabBarLabel: 'Tasks',
-          tabBarTestID: 'tab.tasks',
         }}
       />
       <Tab.Screen
@@ -90,7 +86,6 @@ export function AppTabs() {
         component={AIStack}
         options={{
           tabBarLabel: 'AI',
-          tabBarTestID: 'tab.ai',
         }}
       />
       <Tab.Screen
@@ -98,7 +93,6 @@ export function AppTabs() {
         component={ProfileStack}
         options={{
           tabBarLabel: 'Profile',
-          tabBarTestID: 'tab.profile',
         }}
       />
     </Tab.Navigator>

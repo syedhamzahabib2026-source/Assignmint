@@ -188,7 +188,7 @@ const StepTwo: React.FC<StepTwoProps> = ({ navigation, route }) => {
             <TouchableOpacity
               style={[
                 styles.templatePicker,
-                selectedTemplate && styles.templatePickerSelected,
+                !!selectedTemplate && styles.templatePickerSelected,
               ]}
               onPress={() => setShowTemplatePicker(true)}
             >

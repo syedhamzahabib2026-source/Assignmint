@@ -5,7 +5,7 @@ import { createUserDocument } from './auth';
 
 // Mock GoogleSignin for now
 const GoogleSignin = {
-  configure: () => {
+  configure: (_options?: any) => {
     console.warn('⚠️ Google Sign-In is temporarily disabled due to dependency conflicts');
   },
   hasPlayServices: () => {

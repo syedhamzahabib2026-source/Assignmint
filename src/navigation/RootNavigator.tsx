@@ -6,6 +6,7 @@ import { COLORS } from '../constants';
 import { useAuth } from '../state/AuthProvider';
 import { AppTabs } from './AppTabs';
 import AuthNavigator from './AuthNavigator';
+import ScreenCatalog from './ScreenCatalog';
 import { RootStackParamList } from './types';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -50,7 +51,12 @@ const RootNavigator = () => {
           <Stack.Screen name="Auth" component={AuthNavigator} />
         ) : (
           // User is authenticated or in guest mode - show main app
-          <Stack.Screen name="MainTabs" component={AppTabs} />
+          <>
+            <Stack.Screen name="MainTabs" component={AppTabs} />
+            {__DEV__ && (
+              <Stack.Screen name="ScreenCatalog" component={ScreenCatalog} options={{ headerShown: false }} />
+            )}
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

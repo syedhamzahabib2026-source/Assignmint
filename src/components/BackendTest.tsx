@@ -13,7 +13,7 @@ export const BackendTest: React.FC = () => {
   const [results, setResults] = useState<TestResult[]>([]);
   const [running, setRunning] = useState(false);
 
-  const addResult = (name: string, status: 'success' | 'error', message: string) => {
+  const addResult = (name: string, status: 'pending' | 'success' | 'error', message: string) => {
     setResults(prev => [...prev, { name, status, message, timestamp: new Date() }]);
   };
 
@@ -64,13 +64,13 @@ export const BackendTest: React.FC = () => {
       addResult('Real-time Listener', 'pending', 'Setting up real-time listener...');
       let listenerTriggered = false;
       const unsubscribe = testRef.onSnapshot(
-        (snapshot) => {
+        (snapshot: any) => {
           if (snapshot.exists && !listenerTriggered) {
             listenerTriggered = true;
             addResult('Real-time Listener', 'success', 'Real-time updates working!');
           }
         },
-        (error) => {
+        (error: Error) => {
           addResult('Real-time Listener', 'error', `Error: ${error.message}`);
         }
       );

@@ -82,11 +82,7 @@ Timestamp: ${new Date().toISOString()}
     `.trim();
     
     // Copy to clipboard (you might want to use a library like @react-native-clipboard/clipboard)
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(details);
-    } else {
-      console.log('Error details:', details);
-    }
+    console.log('Error details:', details);
   };
 
   render() {
@@ -115,7 +111,7 @@ export const setupGlobalErrorHandling = () => {
   // Handle uncaught JavaScript errors
   const originalErrorHandler = ErrorUtils.getGlobalHandler();
   
-  ErrorUtils.setGlobalHandler((error: Error, isFatal: boolean) => {
+  ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
     console.error('Global error handler caught:', error, 'isFatal:', isFatal);
     
     // Log to crash reporting service
@@ -128,16 +124,12 @@ export const setupGlobalErrorHandling = () => {
   });
 
   // Handle unhandled promise rejections
-  if (typeof global !== 'undefined') {
-    const originalUnhandledRejection = global.onunhandledrejection;
-    
-    global.onunhandledrejection = (event: any) => {
+  if (typeof (globalThis as any).global !== 'undefined') {
+    const g = globalThis as any;
+    const originalUnhandledRejection = g.onunhandledrejection;
+
+    g.onunhandledrejection = (event: any) => {
       console.error('Unhandled promise rejection:', event.reason);
-      
-      // Log to crash reporting service
-      // Example: crashlytics().recordError(event.reason);
-      
-      // Call the original handler
       if (originalUnhandledRejection) {
         originalUnhandledRejection(event);
       }

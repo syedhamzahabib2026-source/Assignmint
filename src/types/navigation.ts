@@ -26,7 +26,6 @@ export type HomeStackParamList = {
   };
   Notifications: undefined;
   Messages: undefined;
-  NavigationTest: undefined;
 };
 
 // Post Stack ParamList
@@ -146,8 +145,6 @@ export const ROUTES = {
   CHAT_THREAD: 'ChatThread',
   NOTIFICATIONS: 'Notifications',
   MESSAGES: 'Messages',
-  NAVIGATION_TEST: 'NavigationTest',
-
   // Post Stack
   POST: 'Post',
   TASK_POSTED_CONFIRMATION: 'TaskPostedConfirmation',

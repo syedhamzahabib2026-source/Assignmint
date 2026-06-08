@@ -5,7 +5,7 @@ import { AuthProvider } from './src/state/AuthProvider';
 import { ErrorBoundary, setupGlobalErrorHandling } from './src/components/ErrorBoundary';
 import RootNavigator from './src/navigation/RootNavigator';
 
-const STRIPE_PUBLISHABLE_KEY = (typeof process !== 'undefined' && process.env?.STRIPE_PUBLISHABLE_KEY) || '<pk_test_replace_me>';
+const STRIPE_PUBLISHABLE_KEY = (typeof (globalThis as any).process !== 'undefined' && (globalThis as any).process?.env?.STRIPE_PUBLISHABLE_KEY) || '<pk_test_replace_me>';
 
 // Check if Stripe native module is available
 const hasStripe = !!NativeModules.StripeSdk;

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants';
 import Icon, { Icons } from '../components/common/Icon';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../state/AuthProvider';
 import { firestoreService } from '../services/firestoreService';
 import { Notification } from '../types/firestore';
 
