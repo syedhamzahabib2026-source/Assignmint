@@ -114,77 +114,18 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     loadUserData();
   }, [user]);
 
-  // Mock recent activity
-  const recentActivity = [
-    {
-      id: '1',
-      type: 'completed',
-      title: 'Business Case Study Analysis',
-      amount: '$120',
-      date: '2 hours ago',
-      status: 'Completed',
-    },
-    {
-      id: '2',
-      type: 'posted',
-      title: 'Research Paper Writing',
-      amount: '$80',
-      date: '1 day ago',
-      status: 'In Progress',
-    },
-    {
-      id: '3',
-      type: 'completed',
-      title: 'Chemistry Lab Report',
-      amount: '$95',
-      date: '3 days ago',
-      status: 'Completed',
-    },
-    {
-      id: '4',
-      type: 'posted',
-      title: 'Marketing Strategy Plan',
-      amount: '$150',
-      date: '1 week ago',
-      status: 'Bidding',
-    },
-  ];
-
-  // Mock reviews
-  const reviews = [
-    {
-      id: '1',
-      project: 'Business Case Study Analysis',
-      rating: 5.0,
-      comment: 'Excellent work with great attention to detail. Delivered on time and exceeded expectations.',
-      reviewer: 'Sarah M.',
-      date: '2 hours ago',
-    },
-    {
-      id: '2',
-      project: 'Mobile App Development',
-      rating: 4.8,
-      comment: 'Outstanding design and attention to detail. Very professional and responsive.',
-      reviewer: 'Mike R.',
-      date: '1 day ago',
-    },
-    {
-      id: '3',
-      project: 'Chemistry Lab Report',
-      rating: 4.9,
-      comment: 'High-quality work, well-researched and properly formatted. Highly recommended!',
-      reviewer: 'Emily T.',
-      date: '3 days ago',
-    },
-    {
-      id: '4',
-      project: 'Marketing Strategy Plan',
-      rating: 5.0,
-      comment: 'Exceptional work! The strategy was comprehensive and well-executed.',
-      reviewer: 'David L.',
-      date: '1 week ago',
-    },
-  ];
+  const formatRelativeTime = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
 
   const handleSettings = () => {
     navigation.navigate('Settings');
@@ -324,29 +265,28 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Recent Reviews Preview */}
+      {/* Reviews Summary */}
       <View style={styles.reviewsPreviewSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Reviews</Text>
+          <Text style={styles.sectionTitle}>Reviews</Text>
           <TouchableOpacity onPress={() => setActiveTab('reviews')}>
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
-        {reviews.slice(0, 2).map((review) => (
-          <View key={review.id} style={styles.reviewPreviewCard}>
-            <View style={styles.reviewHeader}>
-              <Text style={styles.reviewProject}>{review.project}</Text>
-              <View style={styles.ratingContainer}>
-                <Icon name={Icons.star} size={12} color="#856404" />
-                <Text style={styles.ratingText}> {review.rating}</Text>
-              </View>
+        <View style={styles.reviewPreviewCard}>
+          <View style={styles.reviewHeader}>
+            <Text style={styles.reviewProject}>Overall Rating</Text>
+            <View style={styles.ratingContainer}>
+              <Icon name={Icons.star} size={12} color="#856404" />
+              <Text style={styles.ratingText}> {userData.rating?.toFixed(1) ?? '—'}</Text>
             </View>
-            <Text style={styles.reviewComment} numberOfLines={2}>
-              {review.comment}
-            </Text>
-            <Text style={styles.reviewDate}>{review.date}</Text>
           </View>
-        ))}
+          <Text style={styles.reviewComment}>
+            {(userData.totalReviews ?? 0) > 0
+              ? `Based on ${userData.totalReviews} reviews.`
+              : 'No reviews yet. Complete tasks to earn your first review!'}
+          </Text>
+        </View>
       </View>
     </ScrollView>
   );
@@ -356,30 +296,36 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.activitySection}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
-        {recentActivity.map((activity) => (
-          <View key={activity.id} style={styles.activityCard}>
-            <View style={styles.activityHeader}>
-              <View style={styles.activityType}>
-                <Text style={[
-                  styles.activityTypeText,
-                  activity.type === 'completed' ? styles.completedType : styles.postedType,
-                ]}>
-                  {activity.type === 'completed' ? (
-                    <Icon name={Icons.check} size={12} color="#34C759" />
-                  ) : (
-                    <Icon name={Icons.edit} size={12} color="#007AFF" />
-                  )} {activity.type.toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.activityAmount}>{activity.amount}</Text>
-            </View>
-            <Text style={styles.activityTitle}>{activity.title}</Text>
-            <View style={styles.activityFooter}>
-              <Text style={styles.activityDate}>{activity.date}</Text>
-              <Text style={styles.activityStatus}>{activity.status}</Text>
-            </View>
+        {recentTasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No recent activity</Text>
+            <Text style={styles.emptyStateSubtext}>Your posted and accepted tasks will appear here.</Text>
           </View>
-        ))}
+        ) : (
+          recentTasks.map((task) => {
+            const isPosted = task.createdBy === user?.uid;
+            return (
+              <View key={task.id} style={styles.activityCard}>
+                <View style={styles.activityHeader}>
+                  <View style={styles.activityType}>
+                    <Text style={[
+                      styles.activityTypeText,
+                      isPosted ? styles.postedType : styles.completedType,
+                    ]}>
+                      {isPosted ? 'POSTED' : 'ACCEPTED'}
+                    </Text>
+                  </View>
+                  <Text style={styles.activityAmount}>${task.price}</Text>
+                </View>
+                <Text style={styles.activityTitle}>{task.title}</Text>
+                <View style={styles.activityFooter}>
+                  <Text style={styles.activityDate}>{formatRelativeTime(task.updatedAt)}</Text>
+                  <Text style={styles.activityStatus}>{task.status.replace(/_/g, ' ')}</Text>
+                </View>
+              </View>
+            );
+          })
+        )}
       </View>
     </ScrollView>
   );
@@ -388,25 +334,28 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <View style={styles.reviewsSection}>
         <View style={styles.reviewsHeader}>
-          <Text style={styles.sectionTitle}>All Reviews</Text>
-          <Text style={styles.reviewsCount}>{reviews.length} reviews</Text>
+          <Text style={styles.sectionTitle}>Reviews</Text>
+          <Text style={styles.reviewsCount}>{userData?.totalReviews ?? 0} reviews</Text>
         </View>
-        {reviews.map((review) => (
-          <View key={review.id} style={styles.reviewCard}>
+        {(userData?.totalReviews ?? 0) > 0 && (
+          <View style={styles.reviewCard}>
             <View style={styles.reviewCardHeader}>
-              <Text style={styles.reviewProject}>{review.project}</Text>
+              <Text style={styles.reviewProject}>Overall Rating</Text>
               <View style={styles.ratingContainer}>
                 <Icon name={Icons.star} size={12} color="#856404" />
-                <Text style={styles.ratingText}> {review.rating}</Text>
+                <Text style={styles.ratingText}> {userData?.rating?.toFixed(1) ?? '—'}</Text>
               </View>
             </View>
-            <Text style={styles.reviewComment}>{review.comment}</Text>
-            <View style={styles.reviewFooter}>
-              <Text style={styles.reviewerName}>— {review.reviewer}</Text>
-              <Text style={styles.reviewDate}>{review.date}</Text>
-            </View>
+            <Text style={styles.reviewComment}>
+              Based on {userData?.totalReviews} completed tasks.
+            </Text>
           </View>
-        ))}
+        )}
+        <View style={styles.emptyState}>
+          <Icon name={Icons.star} size={40} color="#E5E5EA" />
+          <Text style={styles.emptyStateText}>Reviews coming soon</Text>
+          <Text style={styles.emptyStateSubtext}>Complete tasks to earn reviews from other users.</Text>
+        </View>
       </View>
     </ScrollView>
   );
@@ -419,20 +368,24 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Balance Overview</Text>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Available Balance</Text>
-            <Text style={styles.balanceAmount}>${userData.availableBalance}</Text>
+            <Text style={styles.balanceAmount}>
+              ${walletData?.available != null ? (walletData.available / 100).toFixed(2) : '0.00'}
+            </Text>
             <TouchableOpacity style={styles.withdrawButton} onPress={handleWithdraw}>
               <Text style={styles.withdrawButtonText}>Withdraw</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Total Earned</Text>
-            <Text style={styles.balanceAmount}>${userData.totalEarnings}</Text>
+            <Text style={styles.balanceLabel}>Pending</Text>
+            <Text style={styles.balanceAmount}>
+              ${walletData?.pending != null ? (walletData.pending / 100).toFixed(2) : '0.00'}
+            </Text>
           </View>
 
           <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Total Withdrawn</Text>
-            <Text style={styles.balanceAmount}>${userData.withdrawnAmount}</Text>
+            <Text style={styles.balanceLabel}>Total Earned</Text>
+            <Text style={styles.balanceAmount}>${(userData?.totalEarnings ?? 0).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -448,18 +401,30 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         {/* Recent Transactions */}
         <View style={styles.transactionsSection}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          {recentActivity.slice(0, 3).map((activity) => (
-            <View key={activity.id} style={styles.transactionCard}>
-              <View style={styles.transactionHeader}>
-                <Text style={styles.transactionTitle}>{activity.title}</Text>
-                <Text style={styles.transactionAmount}>{activity.amount}</Text>
-              </View>
-              <View style={styles.transactionFooter}>
-                <Text style={styles.transactionDate}>{activity.date}</Text>
-                <Text style={styles.transactionStatus}>{activity.status}</Text>
-              </View>
+          {recentTransactions.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No transactions yet</Text>
+              <Text style={styles.emptyStateSubtext}>Your payment history will appear here.</Text>
             </View>
-          ))}
+          ) : (
+            recentTransactions.map((tx) => (
+              <View key={tx.id} style={styles.transactionCard}>
+                <View style={styles.transactionHeader}>
+                  <Text style={styles.transactionTitle}>{tx.description}</Text>
+                  <Text style={[
+                    styles.transactionAmount,
+                    { color: tx.type === 'credit' ? '#34C759' : '#FF3B30' },
+                  ]}>
+                    {tx.type === 'credit' ? '+' : '-'}${(tx.amount / 100).toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.transactionFooter}>
+                  <Text style={styles.transactionDate}>{formatRelativeTime(tx.createdAt)}</Text>
+                  <Text style={styles.transactionStatus}>{tx.status}</Text>
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </View>
     </ScrollView>
@@ -1021,6 +986,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   // DEV MODE Toggle Styles
   devToggleContainer: {
