@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -213,6 +213,17 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     }
   };
 
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter(
+      t =>
+        t.title.toLowerCase().includes(q) ||
+        (t.subject ?? '').toLowerCase().includes(q) ||
+        (t.description ?? '').toLowerCase().includes(q)
+    );
+  }, [tasks, searchQuery]);
+
   const formatDate = (date: any) => {
     if (!date) return 'No deadline';
     if (typeof date === 'string') return new Date(date).toLocaleDateString();
@@ -292,14 +303,20 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading tasks...</Text>
           </View>
-        ) : tasks.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Icon name={Icons.search} size={48} color={COLORS.textSecondary} />
-            <Text style={styles.emptyTitle}>No tasks available</Text>
-            <Text style={styles.emptyText}>Check back later for new opportunities!</Text>
+            <Text style={styles.emptyTitle}>
+              {searchQuery.trim() ? 'No results found' : 'No tasks available'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {searchQuery.trim()
+                ? `No tasks match "${searchQuery.trim()}"`
+                : 'Check back later for new opportunities!'}
+            </Text>
           </View>
         ) : (
-          tasks.map((task) => (
+          filteredTasks.map((task) => (
             <TouchableOpacity
               key={task.id}
               style={styles.taskCard}
