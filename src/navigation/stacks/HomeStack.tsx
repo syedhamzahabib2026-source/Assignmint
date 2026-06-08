@@ -10,7 +10,6 @@ import TaskDetailsScreen from '../../screens/TaskDetailsScreen';
 import ChatThreadScreen from '../../screens/ChatThreadScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import MessagesScreen from '../../screens/MessagesScreen';
-import NavigationTestScreen from '../../screens/NavigationTestScreen';
 
 const Stack = createStackNavigator<HomeStackParamList>();
 
@@ -71,14 +70,7 @@ const HomeStack = () => {
           headerBackTitle: 'Back',
         }}
       />
-      <Stack.Screen
-        name={ROUTES.NAVIGATION_TEST}
-        component={NavigationTestScreen}
-        options={{
-          title: 'Navigation Test',
-          headerBackTitle: 'Back',
-        }}
-      />
+
     </Stack.Navigator>
   );
 };

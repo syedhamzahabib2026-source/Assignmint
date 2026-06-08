@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, FONTS } from '../constants';
+import { auth } from '../lib/firebase';
 
 interface ForgotPasswordScreenProps {
   navigation: any;
@@ -30,8 +31,7 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
     setIsLoading(true);
 
     try {
-      // Mock password reset
-      await new Promise<void>(resolve => setTimeout(resolve, 2000));
+      await auth().sendPasswordResetEmail(email.trim());
 
       Alert.alert(
         'Reset Link Sent',
