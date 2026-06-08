@@ -199,7 +199,9 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   };
 
   const handleScreenCatalog = () => {
-    navigation.navigate('ScreenCatalog');
+    if (__DEV__) {
+      navigation.navigate('ScreenCatalog');
+    }
   };
 
   const handleMenuPress = (menuItem: string) => {

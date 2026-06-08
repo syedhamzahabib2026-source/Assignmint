@@ -121,7 +121,7 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
                   completedByName: user!.displayName || user!.email || 'Unknown',
                 });
                 Alert.alert('Accepted!', 'You can now start working on this task.', [
-                  { text: 'OK', onPress: () => navigation.navigate('Tasks') },
+                  { text: 'OK', onPress: () => navigation.navigate('TasksStack') },
                 ]);
               } catch (err) {
                 console.error('Accept task error:', err);

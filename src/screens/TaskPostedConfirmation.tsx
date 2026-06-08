@@ -171,10 +171,9 @@ const TaskPostedConfirmation: React.FC<TaskPostedConfirmationProps> = ({ navigat
               style={styles.actionButton}
               onPress={() => {
                 if (taskId) {
-                  // Navigate to TaskDetails in the MyTasksStack (nested navigation)
-                  navigation.navigate('MyTasksStack', { 
-                    screen: 'TaskDetails', 
-                    params: { taskId } 
+                  navigation.navigate('TasksStack', {
+                    screen: 'TaskDetails',
+                    params: { taskId }
                   });
                 } else {
                   console.warn('No taskId available for navigation');
