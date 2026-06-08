@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,165 +6,136 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { COLORS } from '../constants';
 import Icon, { Icons } from '../components/common/Icon';
+import { useAuth } from '../hooks/useAuth';
+import { firestoreService } from '../services/firestoreService';
+import { Notification } from '../types/firestore';
+
+type FilterKey = 'all' | 'today' | 'week' | 'earlier';
+
+function getCategory(date: Date): 'today' | 'week' | 'earlier' {
+  const diffHours = (Date.now() - date.getTime()) / 3600000;
+  if (diffHours < 24) return 'today';
+  if (diffHours < 168) return 'week';
+  return 'earlier';
+}
+
+function formatRelativeTime(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function getNotificationIcon(type: Notification['type']) {
+  switch (type) {
+    case 'taskAccepted': return Icons.check;
+    case 'newTask': return Icons.task;
+    case 'messageReceived': return Icons.messages;
+    case 'taskCompleted': return Icons.success;
+    case 'paymentReceived': return Icons.payment;
+    case 'system': return Icons.settings;
+    default: return Icons.notifications;
+  }
+}
+
+function getNotificationColor(type: Notification['type']): string {
+  switch (type) {
+    case 'taskAccepted': return '#34C759';
+    case 'newTask': return '#007AFF';
+    case 'messageReceived': return '#007AFF';
+    case 'taskCompleted': return '#34C759';
+    case 'paymentReceived': return '#34C759';
+    case 'system': return '#8E8E93';
+    default: return '#007AFF';
+  }
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  today: 'Today',
+  week: 'This Week',
+  earlier: 'Earlier',
+};
+
+const CATEGORY_ORDER = ['today', 'week', 'earlier'];
 
 const NotificationsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const [activeFilter, setActiveFilter] = useState('all');
+  const { user } = useAuth();
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [markingRead, setMarkingRead] = useState(false);
 
-  // Mock notifications data
-  const notifications = [
-    {
-      id: '1',
-      type: 'task_accepted',
-      title: 'Task Accepted',
-      message: 'Your "Business Case Study Analysis" task was accepted by Sarah M.',
-      time: '2 minutes ago',
-      isRead: false,
-      avatar: 'user',
-      category: 'today',
-    },
-    {
-      id: '2',
-      type: 'review_received',
-      title: 'New Review Received',
-      message: 'You received a 5-star review for "Marketing Strategy Plan"',
-      time: '1 hour ago',
-      isRead: false,
-      avatar: '⭐',
-      category: 'today',
-    },
-    {
-      id: '3',
-      type: 'new_bid',
-      title: 'New Bid Received',
-      message: 'Mike R. placed a bid of $120 on your "Research Paper" task',
-      time: '3 hours ago',
-      isRead: true,
-      avatar: '💰',
-      category: 'today',
-    },
-    {
-      id: '4',
-      type: 'deadline_reminder',
-      title: 'Deadline Reminder',
-      message: 'Your "Chemistry Lab Report" task is due in 24 hours',
-      time: '5 hours ago',
-      isRead: true,
-      avatar: '⏰',
-      category: 'today',
-    },
-    {
-      id: '5',
-      type: 'payment_received',
-      title: 'Payment Received',
-      message: 'You received $95 for completing "Chemistry Lab Report"',
-      time: '1 day ago',
-      isRead: true,
-      avatar: '💳',
-      category: 'week',
-    },
-    {
-      id: '6',
-      type: 'task_completed',
-      title: 'Task Completed',
-      message: 'Your "Mobile App Development" task was marked as completed',
-      time: '2 days ago',
-      isRead: true,
-      avatar: '✅',
-      category: 'week',
-    },
-    {
-      id: '7',
-      type: 'new_message',
-      title: 'New Message',
-      message: 'David L. sent you a message about "Marketing Strategy Plan"',
-      time: '3 days ago',
-      isRead: true,
-      avatar: 'message',
-      category: 'earlier',
-    },
-    {
-      id: '8',
-      type: 'system_update',
-      title: 'System Update',
-      message: 'New features available: Enhanced bidding system and real-time chat',
-      time: '1 week ago',
-      isRead: true,
-      avatar: '🔧',
-      category: 'earlier',
-    },
-  ];
+  const loadNotifications = useCallback(async (isRefresh = false) => {
+    if (!user) { setLoading(false); return; }
+    if (isRefresh) setRefreshing(true);
+    try {
+      const data = await firestoreService.getNotifications({ userId: user.uid, limit: 50 });
+      setNotifications(data);
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user?.uid]);
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'task_accepted':
-        return Icons.check;
-      case 'review_received':
-        return Icons.star;
-      case 'new_bid':
-        return Icons.money;
-      case 'deadline_reminder':
-        return Icons.clock;
-      case 'payment_received':
-        return Icons.payment;
-      case 'task_completed':
-        return Icons.success;
-      case 'new_message':
-        return Icons.messages;
-      case 'system_update':
-        return Icons.settings;
-      default:
-        return Icons.notifications;
+  useEffect(() => { loadNotifications(); }, [loadNotifications]);
+
+  const handleMarkAllRead = async () => {
+    const unread = notifications.filter(n => !n.isRead);
+    if (!unread.length || markingRead) return;
+    setMarkingRead(true);
+    try {
+      await Promise.all(unread.map(n => firestoreService.markNotificationAsRead(n.id)));
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    } catch (err) {
+      console.error('Failed to mark all read:', err);
+    } finally {
+      setMarkingRead(false);
     }
   };
 
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'task_accepted':
-        return '#34C759';
-      case 'review_received':
-        return '#FFD700';
-      case 'new_bid':
-        return '#007AFF';
-      case 'deadline_reminder':
-        return '#FF9500';
-      case 'payment_received':
-        return '#34C759';
-      case 'task_completed':
-        return '#34C759';
-      case 'new_message':
-        return '#007AFF';
-      case 'system_update':
-        return '#8E8E93';
-      default:
-        return '#007AFF';
+  const handleNotificationPress = (notification: Notification) => {
+    if (!notification.isRead) {
+      firestoreService.markNotificationAsRead(notification.id).catch(() => {});
+      setNotifications(prev =>
+        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+      );
+    }
+    if (notification.taskId) {
+      navigation.navigate('TaskDetails', { taskId: notification.taskId });
     }
   };
 
-  const filterNotifications = () => {
-    if (activeFilter === 'all') {return notifications;}
-    return notifications.filter(notification => notification.category === activeFilter);
-  };
+  const visible = notifications.filter(n => {
+    if (activeFilter === 'all') return true;
+    return getCategory(n.createdAt) === activeFilter;
+  });
 
-  const groupedNotifications = filterNotifications().reduce((groups, notification) => {
-    const category = notification.category;
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(notification);
-    return groups;
-  }, {} as Record<string, typeof notifications>);
+  const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
+    const items = visible.filter(n => getCategory(n.createdAt) === cat);
+    if (items.length) acc[cat] = items;
+    return acc;
+  }, {} as Record<string, Notification[]>);
 
-  const renderNotificationItem = (notification: any) => (
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const renderNotificationItem = (notification: Notification) => (
     <TouchableOpacity
       key={notification.id}
-      style={[
-        styles.notificationItem,
-        !notification.isRead && styles.unreadNotification,
-      ]}
+      style={[styles.notificationItem, !notification.isRead && styles.unreadNotification]}
+      onPress={() => handleNotificationPress(notification)}
     >
       <View style={styles.notificationAvatar}>
         <Icon name={Icons.user} size={24} color={COLORS.textSecondary} />
@@ -176,73 +147,65 @@ const NotificationsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       <View style={styles.notificationContent}>
         <View style={styles.notificationHeader}>
           <Text style={styles.notificationTitle}>{notification.title}</Text>
-          <Text style={styles.notificationTime}>{notification.time}</Text>
+          <Text style={styles.notificationTime}>{formatRelativeTime(notification.createdAt)}</Text>
         </View>
-        <Text style={styles.notificationMessage}>{notification.message}</Text>
+        <Text style={styles.notificationMessage}>{notification.body}</Text>
       </View>
 
       <View style={styles.notificationIcon}>
-        <Icon name={getNotificationIcon(notification.type)} size={20} color={getNotificationColor(notification.type)} />
+        <Icon
+          name={getNotificationIcon(notification.type)}
+          size={20}
+          color={getNotificationColor(notification.type)}
+        />
       </View>
     </TouchableOpacity>
   );
 
-  const renderNotificationGroup = (category: string, notifications: any[]) => {
-    const categoryLabels = {
-      today: 'Today',
-      week: 'This Week',
-      earlier: 'Earlier',
-    };
-
-    return (
-      <View key={category} style={styles.notificationGroup}>
-        <Text style={styles.groupTitle}>{categoryLabels[category as keyof typeof categoryLabels]}</Text>
-        {notifications.map(renderNotificationItem)}
-      </View>
-    );
-  };
+  const renderGroup = (category: string, items: Notification[]) => (
+    <View key={category} style={styles.notificationGroup}>
+      <Text style={styles.groupTitle}>{CATEGORY_LABELS[category]}</Text>
+      {items.map(renderNotificationItem)}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity style={styles.markAllReadButton}>
-          <Text style={styles.markAllReadText}>Mark all read</Text>
+        <TouchableOpacity
+          style={styles.markAllReadButton}
+          onPress={handleMarkAllRead}
+          disabled={markingRead || unreadCount === 0}
+        >
+          {markingRead
+            ? <ActivityIndicator size="small" color="#007AFF" />
+            : <Text style={[styles.markAllReadText, unreadCount === 0 && styles.markAllReadDisabled]}>
+                Mark all read
+              </Text>
+          }
         </TouchableOpacity>
       </View>
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {[
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          {([
             { key: 'all', label: 'All' },
             { key: 'today', label: 'Today' },
             { key: 'week', label: 'This Week' },
             { key: 'earlier', label: 'Earlier' },
-          ].map((filter) => (
+          ] as { key: FilterKey; label: string }[]).map((filter) => (
             <TouchableOpacity
               key={filter.key}
-              style={[
-                styles.filterTab,
-                activeFilter === filter.key && styles.activeFilterTab,
-              ]}
+              style={[styles.filterTab, activeFilter === filter.key && styles.activeFilterTab]}
               onPress={() => setActiveFilter(filter.key)}
             >
-              <Text style={[
-                styles.filterTabText,
-                activeFilter === filter.key && styles.activeFilterTabText,
-              ]}>
+              <Text style={[styles.filterTabText, activeFilter === filter.key && styles.activeFilterTabText]}>
                 {filter.label}
               </Text>
             </TouchableOpacity>
@@ -251,24 +214,29 @@ const NotificationsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       </View>
 
       {/* Notifications List */}
-      <ScrollView
-        style={styles.notificationsList}
-        showsVerticalScrollIndicator={false}
-      >
-        {Object.entries(groupedNotifications).map(([category, notifications]) =>
-          renderNotificationGroup(category, notifications)
-        )}
-
-        {Object.keys(groupedNotifications).length === 0 && (
-          <View style={styles.emptyState}>
-            <Icon name={Icons.notifications} size={48} color={COLORS.textSecondary} />
-            <Text style={styles.emptyStateTitle}>No notifications</Text>
-            <Text style={styles.emptyStateText}>
-              You're all caught up! New notifications will appear here.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      {loading ? (
+        <ActivityIndicator style={styles.loader} size="large" color={COLORS.primary} />
+      ) : (
+        <ScrollView
+          style={styles.notificationsList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => loadNotifications(true)} tintColor={COLORS.primary} />
+          }
+        >
+          {Object.keys(grouped).length > 0 ? (
+            Object.entries(grouped).map(([cat, items]) => renderGroup(cat, items))
+          ) : (
+            <View style={styles.emptyState}>
+              <Icon name={Icons.notifications} size={48} color={COLORS.textSecondary} />
+              <Text style={styles.emptyStateTitle}>No notifications</Text>
+              <Text style={styles.emptyStateText}>
+                You're all caught up! New notifications will appear here.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -308,6 +276,9 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '500',
   },
+  markAllReadDisabled: {
+    color: '#C7C7CC',
+  },
   filterContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -333,6 +304,10 @@ const styles = StyleSheet.create({
   },
   activeFilterTabText: {
     color: '#FFFFFF',
+  },
+  loader: {
+    flex: 1,
+    marginTop: 60,
   },
   notificationsList: {
     flex: 1,
@@ -370,9 +345,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
     position: 'relative',
-  },
-  avatarText: {
-    fontSize: 20,
   },
   unreadDot: {
     position: 'absolute',
@@ -416,18 +388,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconText: {
-    fontSize: 16,
-  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-  },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 16,
   },
   emptyStateTitle: {
     fontSize: 18,
