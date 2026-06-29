@@ -5,10 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
   SafeAreaView,
-  Image,
   ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -18,7 +16,11 @@ import { analytics, ANALYTICS_EVENTS } from '../services/AnalyticsService';
 import { COLORS } from '../constants';
 import { firestoreService } from '../services/firestoreService';
 import { stripeService } from '../services/stripeService';
-import { User, Task, Transaction } from '../types/firestore';
+import { User, Task, Review } from '../types/firestore';
+import TrustBadge from '../components/TrustBadge';
+import { getTrustTier, getTrustTierColor } from '../services/trust/trustScore';
+import { getReviewsForUser } from '../services/reviewService';
+import { TAG_LABELS } from '../components/LeaveReviewModal';
 
 const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -27,6 +29,8 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [walletData, setWalletData] = useState<any>(null);
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Load user data from Firestore
@@ -49,9 +53,11 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             displayName: user.displayName || user.email || 'Unknown User',
             photoURL: user.photoURL || undefined,
             role: 'both',
-            trustScore: 100,
-            rating: 5.0,
+            trustScore: 0,
+            rating: 0,
             totalReviews: 0,
+            ratingSum: 0,
+            reviewTags: {},
             tasksCompleted: 0,
             tasksPosted: 0,
             totalEarnings: 0,
@@ -103,6 +109,13 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           console.warn('⚠️ Transaction history not available:', error);
           setRecentTransactions([]);
         }
+
+        // Load reviews (non-blocking)
+        setReviewsLoading(true);
+        getReviewsForUser(user.uid, 20)
+          .then(setReviews)
+          .catch(() => setReviews([]))
+          .finally(() => setReviewsLoading(false));
 
       } catch (error) {
         console.error('❌ Error loading user data:', error);
@@ -330,35 +343,115 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     </ScrollView>
   );
 
-  const renderReviewsTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.reviewsSection}>
-        <View style={styles.reviewsHeader}>
-          <Text style={styles.sectionTitle}>Reviews</Text>
-          <Text style={styles.reviewsCount}>{userData?.totalReviews ?? 0} reviews</Text>
-        </View>
-        {(userData?.totalReviews ?? 0) > 0 && (
-          <View style={styles.reviewCard}>
-            <View style={styles.reviewCardHeader}>
-              <Text style={styles.reviewProject}>Overall Rating</Text>
+  const renderStars = (stars: number) => {
+    return (
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Icon
+            key={n}
+            name={n <= stars ? 'star' : 'star-outline'}
+            size={14}
+            color={n <= stars ? '#FFD700' : COLORS.gray300}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const renderReviewsTab = () => {
+    const totalReviews = userData?.totalReviews ?? 0;
+    const score = userData?.trustScore ?? 0;
+    const tier = getTrustTier(score);
+    const tierColor = getTrustTierColor(tier);
+
+    return (
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.reviewsSection}>
+          {/* Trust + rating summary card */}
+          <View style={styles.trustSummaryCard}>
+            <View style={styles.trustSummaryRow}>
+              <TrustBadge score={score} size="md" />
               <View style={styles.ratingContainer}>
-                <Icon name={Icons.star} size={12} color="#856404" />
-                <Text style={styles.ratingText}> {userData?.rating?.toFixed(1) ?? '—'}</Text>
+                <Icon name={Icons.star} size={14} color="#856404" />
+                <Text style={styles.ratingText}>
+                  {totalReviews > 0 ? (userData?.rating ?? 0).toFixed(1) : '—'}
+                </Text>
               </View>
             </View>
-            <Text style={styles.reviewComment}>
-              Based on {userData?.totalReviews} completed tasks.
+            <Text style={styles.reviewsCountText}>
+              {totalReviews > 0
+                ? `${totalReviews} review${totalReviews !== 1 ? 's' : ''}`
+                : 'No reviews yet'}
             </Text>
+            {totalReviews > 0 && (
+              <View style={styles.ratingBarRow}>
+                {[5, 4, 3, 2, 1].map((n) => {
+                  const count = reviews.filter(r => r.stars === n).length;
+                  const pct = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
+                  return (
+                    <View key={n} style={styles.ratingBarItem}>
+                      <Text style={styles.ratingBarLabel}>{n}</Text>
+                      <View style={styles.ratingBarTrack}>
+                        <View style={[styles.ratingBarFill, { width: `${pct}%` as any, backgroundColor: tierColor }]} />
+                      </View>
+                      <Text style={styles.ratingBarCount}>{count}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
-        )}
-        <View style={styles.emptyState}>
-          <Icon name={Icons.star} size={40} color="#E5E5EA" />
-          <Text style={styles.emptyStateText}>Reviews coming soon</Text>
-          <Text style={styles.emptyStateSubtext}>Complete tasks to earn reviews from other users.</Text>
+
+          {/* Individual reviews */}
+          {reviewsLoading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator color={COLORS.primary} />
+            </View>
+          ) : reviews.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Icon name={Icons.star} size={40} color="#E5E5EA" />
+              <Text style={styles.emptyStateText}>No reviews yet</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Complete tasks to earn reviews from other users.
+              </Text>
+            </View>
+          ) : (
+            reviews.map((review) => (
+              <View key={review.id} style={styles.reviewCard}>
+                <View style={styles.reviewCardHeader}>
+                  <Text style={styles.reviewProject} numberOfLines={1}>
+                    {review.authorName}
+                  </Text>
+                  {renderStars(review.stars)}
+                </View>
+                {review.tags.length > 0 && (
+                  <View style={styles.reviewTagsRow}>
+                    {review.tags.map((tag) => (
+                      <View key={tag} style={styles.reviewTagChip}>
+                        <Text style={styles.reviewTagText}>
+                          {TAG_LABELS[tag] ?? tag}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {!!review.comment && (
+                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                )}
+                <Text style={styles.reviewDate}>
+                  {review.createdAt
+                    ? new Date(review.createdAt).toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })
+                    : ''}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
-      </View>
-    </ScrollView>
-  );
+      </ScrollView>
+    );
+  };
 
   const renderWalletTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -457,8 +550,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <Text style={styles.userName}>{userData?.displayName || userData?.email || 'User'}</Text>
             <Text style={styles.userTitle}>{userData?.role || 'User'}</Text>
             <View style={styles.trustScoreContainer}>
-              <Text style={styles.trustScoreLabel}>Trust Score:</Text>
-              <Text style={styles.trustScore}>{userData?.trustScore || 0}%</Text>
+              <TrustBadge score={userData?.trustScore ?? 0} size="sm" />
             </View>
           </View>
         </View>
@@ -1103,6 +1195,78 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary || '#8E8E93',
     textAlign: 'center',
     marginTop: 5,
+  },
+  // Reviews tab styles
+  trustSummaryCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  trustSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  reviewsCountText: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 12,
+  },
+  ratingBarRow: {
+    gap: 6,
+  },
+  ratingBarItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ratingBarLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    width: 12,
+    textAlign: 'right',
+  },
+  ratingBarTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  ratingBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  ratingBarCount: {
+    fontSize: 12,
+    color: '#8E8E93',
+    width: 16,
+    textAlign: 'right',
+  },
+  reviewTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  reviewTagChip: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  reviewTagText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '500',
   },
 });
 
