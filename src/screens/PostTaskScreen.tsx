@@ -96,7 +96,7 @@ const PostTaskScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         fileUrls: formData.files || [],
         tags: formData.tags || [],
         specialInstructions: formData.specialInstructions || '',
-        estimatedHours: formData.estimatedHours || null,
+        estimatedHours: formData.estimatedHours || undefined,
         matchingType: formData.matchingType as 'manual' | 'auto',
         autoMatch: formData.autoMatch,
         applicants: [],

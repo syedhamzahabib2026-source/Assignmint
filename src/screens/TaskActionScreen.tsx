@@ -13,11 +13,12 @@ import {
   Linking,
 } from 'react-native';
 import { COLORS, FONTS, SPACING } from '../constants';
-import Icon, { Icons } from '../components/common/Icon';
+import Icon from '../components/common/Icon';
 import { useAuth } from '../state/AuthProvider';
 import { firestoreService } from '../services/firestoreService';
 import { fcmService } from '../services/fcmService';
 import { Task } from '../types/firestore';
+import LeaveReviewModal from '../components/LeaveReviewModal';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,9 @@ const TaskActionScreen = ({ route, navigation }: any) => {
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // review modal state — shown after a successful approval
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,12 +102,20 @@ const TaskActionScreen = ({ route, navigation }: any) => {
         );
       }
 
-      navigation.goBack();
+      // Show review modal before leaving — the modal's onClose/onSubmitted handles navigation
+      setShowReviewModal(true);
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to approve submission. Please try again.');
-    } finally {
       setActing(false);
     }
+    // Note: setActing(false) is intentionally omitted here — the acting state
+    // persists so the buttons stay disabled while the review modal is open.
+  };
+
+  const handleReviewDone = () => {
+    setShowReviewModal(false);
+    setActing(false);
+    navigation.goBack();
   };
 
   // ── reject / request revision ─────────────────────────────────────────────
@@ -176,6 +188,7 @@ const TaskActionScreen = ({ route, navigation }: any) => {
       text: `Revision requested: ${reason}`,
       type: 'text',
       isRead: false,
+      readBy: {},
     });
   };
 
@@ -193,7 +206,7 @@ const TaskActionScreen = ({ route, navigation }: any) => {
   if (!task) {
     return (
       <SafeAreaView style={styles.centered}>
-        <Icon type={Icons.Ionicons} name="alert-circle-outline" size={48} color={COLORS.error} />
+        <Icon name="alert-circle-outline" size={48} color={COLORS.error} />
         <Text style={styles.errorText}>Task not found.</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtnText}>Go Back</Text>
@@ -203,13 +216,15 @@ const TaskActionScreen = ({ route, navigation }: any) => {
   }
 
   const hasFiles = (task.submissionFileUrls ?? []).length > 0;
+  const expertId   = task.submittedBy ?? task.completedBy ?? '';
+  const expertName = task.submittedByName ?? task.completedByName ?? 'Expert';
 
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Icon type={Icons.Ionicons} name="chevron-back" size={24} color={COLORS.text} />
+          <Icon name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Review Submission</Text>
         <View style={{ width: 40 }} />
@@ -220,13 +235,13 @@ const TaskActionScreen = ({ route, navigation }: any) => {
         <View style={styles.card}>
           <Text style={styles.taskTitle}>{task.title}</Text>
           <View style={styles.meta}>
-            <Icon type={Icons.Ionicons} name="person-outline" size={14} color={COLORS.textSecondary} />
+            <Icon name="person-outline" size={14} color={COLORS.textSecondary} />
             <Text style={styles.metaText}>
               Submitted by {task.submittedByName ?? 'Expert'}
             </Text>
           </View>
           <View style={styles.meta}>
-            <Icon type={Icons.Ionicons} name="time-outline" size={14} color={COLORS.textSecondary} />
+            <Icon name="time-outline" size={14} color={COLORS.textSecondary} />
             <Text style={styles.metaText}>{formatDate(task.submittedAt)}</Text>
           </View>
           <View style={[styles.statusPill, styles.statusSubmitted]}>
@@ -257,7 +272,7 @@ const TaskActionScreen = ({ route, navigation }: any) => {
                 )}
               >
                 <View style={styles.fileIcon}>
-                  <Icon type={Icons.Ionicons} name="document-outline" size={20} color={COLORS.primary} />
+                  <Icon name="document-outline" size={20} color={COLORS.primary} />
                 </View>
                 <View style={styles.fileInfo}>
                   <Text style={styles.fileName} numberOfLines={1}>
@@ -265,12 +280,12 @@ const TaskActionScreen = ({ route, navigation }: any) => {
                   </Text>
                   <Text style={styles.fileHint}>Tap to open</Text>
                 </View>
-                <Icon type={Icons.Ionicons} name="open-outline" size={16} color={COLORS.textSecondary} />
+                <Icon name="open-outline" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
             ))
           ) : (
             <View style={styles.emptyFiles}>
-              <Icon type={Icons.Ionicons} name="document-outline" size={32} color={COLORS.gray300} />
+              <Icon name="document-outline" size={32} color={COLORS.gray300} />
               <Text style={styles.emptyFilesText}>No files attached to this submission.</Text>
             </View>
           )}
@@ -286,7 +301,7 @@ const TaskActionScreen = ({ route, navigation }: any) => {
             {acting ? (
               <ActivityIndicator color={COLORS.warning} size="small" />
             ) : (
-              <Icon type={Icons.Ionicons} name="refresh-outline" size={18} color={COLORS.warning} />
+              <Icon name="refresh-outline" size={18} color={COLORS.warning} />
             )}
             <Text style={[styles.actionBtnText, styles.rejectBtnText]}>Request Revision</Text>
           </TouchableOpacity>
@@ -299,7 +314,7 @@ const TaskActionScreen = ({ route, navigation }: any) => {
             {acting ? (
               <ActivityIndicator color={COLORS.white} size="small" />
             ) : (
-              <Icon type={Icons.Ionicons} name="checkmark-circle-outline" size={18} color={COLORS.white} />
+              <Icon name="checkmark-circle-outline" size={18} color={COLORS.white} />
             )}
             <Text style={[styles.actionBtnText, styles.approveBtnText]}>Approve & Complete</Text>
           </TouchableOpacity>
@@ -347,6 +362,21 @@ const TaskActionScreen = ({ route, navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Post-approval review modal */}
+      {user && expertId ? (
+        <LeaveReviewModal
+          visible={showReviewModal}
+          onClose={handleReviewDone}
+          onSubmitted={handleReviewDone}
+          taskId={taskId}
+          subjectId={expertId}
+          subjectName={expertName}
+          role="expert"
+          authorId={user.uid}
+          authorName={user.displayName ?? user.email ?? 'User'}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
