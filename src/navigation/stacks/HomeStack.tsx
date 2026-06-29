@@ -7,6 +7,7 @@ import { ROUTES } from '../../types/navigation';
 // Import screens - Using new TypeScript screens from src/screens/
 import HomeScreen from '../../screens/HomeScreen';
 import TaskDetailsScreen from '../../screens/TaskDetailsScreen';
+import TaskActionScreen from '../../screens/TaskActionScreen';
 import ChatThreadScreen from '../../screens/ChatThreadScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import MessagesScreen from '../../screens/MessagesScreen';
@@ -45,6 +46,15 @@ const HomeStack = () => {
           title: 'Task Details',
           headerBackTitle: 'Back',
         })}
+      />
+      <Stack.Screen
+        name={ROUTES.TASK_ACTION}
+        component={TaskActionScreen}
+        options={{
+          title: 'Review Submission',
+          headerBackTitle: 'Back',
+          headerShown: false,
+        }}
       />
       <Stack.Screen
         name={ROUTES.CHAT_THREAD}

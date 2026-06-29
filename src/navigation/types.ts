@@ -33,6 +33,9 @@ export type HomeStackParamList = {
     taskId: string;
     task?: any;
   };
+  TaskAction: {
+    taskId: string;
+  };
   ChatThread: {
     chat: {
       id: string;
@@ -65,7 +68,9 @@ export type TasksStackParamList = {
   };
   UploadDelivery: {
     taskId: string;
-    task?: any;
+  };
+  TaskAction: {
+    taskId: string;
   };
   ChatThread: {
     chat: {
@@ -151,6 +156,7 @@ export const ROUTES = {
   // Tasks Stack
   TASKS: 'Tasks',
   UPLOAD_DELIVERY: 'UploadDelivery',
+  TASK_ACTION: 'TaskAction',
 
   // AI Stack
   AI: 'AI',

@@ -356,7 +356,14 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
 
       {/* Action bar */}
       <View style={styles.actionBar}>
-        {isOwner ? (
+        {isOwner && task.status === 'submitted' ? (
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.acceptBtn]}
+            onPress={() => navigation.navigate('TaskAction', { taskId: task.id })}
+          >
+            <Text style={[styles.actionBtnText, styles.acceptBtnText]}>Review Submission</Text>
+          </TouchableOpacity>
+        ) : isOwner ? (
           <View style={styles.ownerNote}>
             <Icon name={Icons.info} size={18} color={COLORS.textSecondary} />
             <Text style={styles.ownerNoteText}>This is your task</Text>

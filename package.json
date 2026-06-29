@@ -38,7 +38,8 @@
     "e2e": "concurrently -k -s first \"cross-env E2E=true npm run emu:start\" \"npm:detox:build && cross-env E2E=true npm:detox:test\"",
     "clean:rn": "pkill -f 'react-native start' || true && watchman watch-del-all && rm -rf $TMPDIR/react-* $TMPDIR/haste-* $TMPDIR/metro-* && rm -rf ios/Pods ios/Podfile.lock && rm -rf ~/Library/Developer/Xcode/DerivedData && npm install && cd ios && pod install && cd ..",
     "start:clean": "bash -lc \"killall -9 node || true; watchman watch-del-all || true; rm -rf $TMPDIR/metro-* $TMPDIR/haste-* $TMPDIR/react-*; rm -rf node_modules; npm install; npm start --reset-cache\"",
-    "ios:rebuild": "bash -lc \"cd ios && rm -rf Pods Podfile.lock && pod install --repo-update && cd .. && npx react-native run-ios\""
+    "ios:rebuild": "bash -lc \"cd ios && rm -rf Pods Podfile.lock && pod install --repo-update && cd .. && npx react-native run-ios\"",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.0.6",
@@ -48,6 +49,7 @@
     "@react-native-firebase/auth": "^17.5.0",
     "@react-native-firebase/firestore": "^17.5.0",
     "@react-native-firebase/messaging": "^17.5.0",
+    "@react-native-firebase/storage": "^24.1.0",
     "@react-native/virtualized-lists": "^0.79.2",
     "@react-navigation/bottom-tabs": "^7.4.5",
     "@react-navigation/elements": "2.5.2",
@@ -58,6 +60,7 @@
     "react": "18.3.1",
     "react-native": "0.72.15",
     "react-native-config": "^1.5.7",
+    "react-native-document-picker": "^9.3.1",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-reanimated": "~3.3.0",
     "react-native-safe-area-context": "5.4.0",

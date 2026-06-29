@@ -20,7 +20,7 @@ target 'Assignmint' do
   # Temporarily disable Firestore and Messaging due to pod issues
   # pod 'RNFBFirestore', :path => '../node_modules/@react-native-firebase/firestore'
   # pod 'RNFBMessaging', :path => '../node_modules/@react-native-firebase/messaging'
-  # pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage'
+  pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage'
   
   # Stripe React Native
   pod 'stripe-react-native', :path => '../node_modules/@stripe/stripe-react-native'

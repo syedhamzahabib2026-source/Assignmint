@@ -16,6 +16,14 @@ import {
   NotificationQuery,
 } from '../types/firestore';
 
+// Firestore rejects any field whose value is `undefined`. Strip them before
+// every write so callers don't have to remember to do it themselves.
+function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as Partial<T>;
+}
+
 class FirestoreService {
   private convertTimestamps(data: any): any {
     if (!data) return data;
@@ -36,7 +44,7 @@ class FirestoreService {
     const ref = getFirebaseDb().collection(COLLECTIONS.USERS).doc();
     await ref.set({
       uid: ref.id,
-      ...userData,
+      ...stripUndefined(userData),
       createdAt: firestore.FieldValue.serverTimestamp(),
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });
@@ -51,7 +59,7 @@ class FirestoreService {
 
   async updateUser(userId: string, updates: Partial<User>): Promise<void> {
     await getFirebaseDb().collection(COLLECTIONS.USERS).doc(userId).update({
-      ...updates,
+      ...stripUndefined(updates),
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });
   }
@@ -61,7 +69,7 @@ class FirestoreService {
     const ref = getFirebaseDb().collection(COLLECTIONS.TASKS).doc();
     await ref.set({
       id: ref.id,
-      ...taskData,
+      ...stripUndefined(taskData),
       createdAt: firestore.FieldValue.serverTimestamp(),
       updatedAt: firestore.FieldValue.serverTimestamp(),
       deadline: taskData.deadline ? firestore.Timestamp.fromDate(taskData.deadline) : null,
@@ -77,7 +85,7 @@ class FirestoreService {
 
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
     const updateData: any = {
-      ...updates,
+      ...stripUndefined(updates),
       updatedAt: firestore.FieldValue.serverTimestamp(),
     };
     if (updates.deadline) {
@@ -138,7 +146,7 @@ class FirestoreService {
     const ref = getFirebaseDb().collection(COLLECTIONS.CHATS).doc();
     await ref.set({
       id: ref.id,
-      ...chatData,
+      ...stripUndefined(chatData),
       createdAt: firestore.FieldValue.serverTimestamp(),
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });
@@ -203,7 +211,7 @@ class FirestoreService {
       .doc();
     await msgRef.set({
       id: msgRef.id,
-      ...messageData,
+      ...stripUndefined(messageData),
       timestamp: firestore.FieldValue.serverTimestamp(),
     });
     await getFirebaseDb()
@@ -250,7 +258,7 @@ class FirestoreService {
     const ref = getFirebaseDb().collection(COLLECTIONS.NOTIFICATIONS).doc();
     await ref.set({
       id: ref.id,
-      ...notificationData,
+      ...stripUndefined(notificationData),
       createdAt: firestore.FieldValue.serverTimestamp(),
     });
     return ref.id;
@@ -320,7 +328,7 @@ class FirestoreService {
     const ref = getFirebaseDb().collection(COLLECTIONS.TRANSACTIONS).doc();
     await ref.set({
       id: ref.id,
-      ...transactionData,
+      ...stripUndefined(transactionData),
       createdAt: firestore.FieldValue.serverTimestamp(),
     });
     return ref.id;
@@ -344,7 +352,7 @@ class FirestoreService {
     const ref = getFirebaseDb().collection(COLLECTIONS.AI_SESSIONS).doc();
     await ref.set({
       id: ref.id,
-      ...sessionData,
+      ...stripUndefined(sessionData),
       createdAt: firestore.FieldValue.serverTimestamp(),
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });

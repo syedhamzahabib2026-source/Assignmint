@@ -227,12 +227,22 @@ const MyTasksScreen: React.FC = () => {
             )}
           </View>
 
-          <TouchableOpacity
-            style={styles.viewButton}
-            onPress={() => navigation.navigate('TaskDetails', { taskId: task.id })}
-          >
-            <Text style={styles.viewButtonText}>View</Text>
-          </TouchableOpacity>
+          <View style={styles.footerRight}>
+            {isAccepted && task.status === 'in_progress' && (
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={() => navigation.navigate('UploadDelivery', { taskId: task.id })}
+              >
+                <Text style={styles.submitButtonText}>Submit Work</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.viewButton}
+              onPress={() => navigation.navigate('TaskDetails', { taskId: task.id })}
+            >
+              <Text style={styles.viewButtonText}>View</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -573,6 +583,22 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: FONTS.sizes.xs,
     color: COLORS.textSecondary,
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  submitButton: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  submitButtonText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.white,
   },
   viewButton: {
     backgroundColor: COLORS.primary,

@@ -77,7 +77,7 @@ class FCMService {
         type: 'system',
         title,
         body,
-        data,
+        ...(data !== undefined && { data }),
         isRead: false,
       });
     } catch (error) {
@@ -88,10 +88,14 @@ class FCMService {
   async sendTaskNotification(
     userId: string,
     taskId: string,
-    type: 'newTask' | 'taskAccepted' | 'taskCompleted',
+    type: 'newTask' | 'taskAccepted' | 'taskSubmitted' | 'taskCompleted' | 'taskRevision',
     title: string,
     body: string
   ): Promise<void> {
+    if (!userId || !taskId) {
+      console.warn('sendTaskNotification skipped: userId or taskId is missing', { userId, taskId });
+      return;
+    }
     try {
       await firestoreService.createNotification({
         userId,

@@ -3,7 +3,7 @@
 import firebaseAuth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import messagingModule from '@react-native-firebase/messaging';
-// import storage, { FirebaseStorageTypes } from '@react-native-firebase/storage';
+import storageModule from '@react-native-firebase/storage';
 import { GOOGLE_WEB_CLIENT_ID } from '../config/firebase.config';
 
 if (__DEV__) console.log('### USING React Native Firebase');
@@ -37,9 +37,23 @@ try {
   console.error('❌ Firebase Messaging initialization failed:', error);
 }
 
-const mockStorage = () => {
-  console.warn('⚠️ Storage is temporarily disabled');
-  return null;
+let storageInstance: any = null;
+try {
+  storageInstance = storageModule();
+  console.log('✅ Firebase Storage initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase Storage initialization failed:', error);
+}
+
+const safeStorage = () => {
+  if (storageInstance) return storageInstance;
+  try {
+    storageInstance = storageModule();
+    return storageInstance;
+  } catch (error) {
+    console.error('❌ Storage not available:', error);
+    throw new Error('Firebase Storage is not available. Run pod install and rebuild.');
+  }
 };
 
 // Safe auth function that handles initialization errors
@@ -92,10 +106,10 @@ export { GOOGLE_WEB_CLIENT_ID };
 export const auth = safeAuth;
 export const db = safeFirestore;
 export const messaging = safeMessaging;
-export const storage = mockStorage;
+export const storage = safeStorage;
 
 // For backward compatibility, also export as functions
 export const getFirebaseAuth = () => safeAuth();
 export const getFirebaseDb = () => safeFirestore();
 export const getMessagingInstance = () => safeMessaging();
-export const getStorageInstance = () => mockStorage();
+export const getStorageInstance = () => safeStorage();

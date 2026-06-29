@@ -7,6 +7,7 @@ import { TasksStackParamList, ROUTES } from '../types';
 import MyTasksScreen from '../../screens/MyTasksScreen';
 import TaskDetailsScreen from '../../screens/TaskDetailsScreen';
 import UploadDeliveryScreen from '../../screens/UploadDeliveryScreen';
+import TaskActionScreen from '../../screens/TaskActionScreen';
 import ChatThreadScreen from '../../screens/ChatThreadScreen';
 
 const Stack = createStackNavigator<TasksStackParamList>();
@@ -48,8 +49,18 @@ const TasksStack = () => {
         name={ROUTES.UPLOAD_DELIVERY}
         component={UploadDeliveryScreen}
         options={{
-          title: 'Upload Delivery',
+          title: 'Submit Work',
           headerBackTitle: 'Back',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name={ROUTES.TASK_ACTION}
+        component={TaskActionScreen}
+        options={{
+          title: 'Review Submission',
+          headerBackTitle: 'Back',
+          headerShown: false,
         }}
       />
       <Stack.Screen

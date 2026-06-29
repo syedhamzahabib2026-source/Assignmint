@@ -54,6 +54,13 @@ export interface Task {
   completedAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
+  // Submission fields (set when expert submits work)
+  submittedAt?: Date;
+  submittedBy?: string;
+  submittedByName?: string;
+  submissionNote?: string;
+  submissionFileUrls?: string[];
+  rejectionReason?: string;
 }
 
 export interface Chat {
@@ -90,7 +97,7 @@ export interface Message {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'newTask' | 'taskAccepted' | 'messageReceived' | 'taskCompleted' | 'paymentReceived' | 'system';
+  type: 'newTask' | 'taskAccepted' | 'taskSubmitted' | 'taskCompleted' | 'taskRevision' | 'messageReceived' | 'paymentReceived' | 'system';
   title: string;
   body: string;
   data?: { [key: string]: string };

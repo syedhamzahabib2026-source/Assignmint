@@ -28,7 +28,7 @@
 		73CF711AA51EDAA792E809F6 /* Pods-Assignmint.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Assignmint.release.xcconfig"; path = "Target Support Files/Pods-Assignmint/Pods-Assignmint.release.xcconfig"; sourceTree = "<group>"; };
 		76E67C0C00A382D86AEC35EB /* libPods-Assignmint.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Assignmint.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Assignmint/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		8D24720B88934C979BE8FF40 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		8D24720B88934C979BE8FF40 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BBEA18012E6BC741007CB031 /* Assignmint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = Assignmint.entitlements; path = Assignmint/Assignmint.entitlements; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
