@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import Icon, { Icons } from '../components/common/Icon';
 import { useAuth } from '../state/AuthProvider';
 import { firestoreService } from '../services/firestoreService';
 import { Task } from '../types/firestore';
+import TrustBadge from '../components/TrustBadge';
+import LeaveReviewModal from '../components/LeaveReviewModal';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -67,6 +69,11 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [negotiating, setNegotiating] = useState(false);
+  const [posterTrustScore, setPosterTrustScore] = useState<number | null>(null);
+
+  // Review modal state for completed task open path
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const reviewPromptShown = useRef(false);
 
   useEffect(() => {
     if (!taskId) {
@@ -74,10 +81,35 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
       return;
     }
     firestoreService.getTask(taskId)
-      .then(setTask)
+      .then((t) => {
+        setTask(t);
+        // Load poster's trust score for badge display
+        if (t?.createdBy) {
+          firestoreService.getUser(t.createdBy)
+            .then((u) => setPosterTrustScore(u?.trustScore ?? 0))
+            .catch(() => setPosterTrustScore(0));
+        }
+      })
       .catch((err) => console.error('TaskDetailsScreen fetch error:', err))
       .finally(() => setLoading(false));
   }, [taskId]);
+
+  // Auto-prompt for review on completed task (only once per mount)
+  useEffect(() => {
+    if (!task || !user || reviewPromptShown.current) return;
+    if (task.status !== 'completed') return;
+
+    const isRequester = task.createdBy === user.uid;
+    const isExpert    = task.completedBy === user.uid;
+
+    if (isRequester && (task.requesterReviewId ?? null) === null) {
+      reviewPromptShown.current = true;
+      setShowReviewModal(true);
+    } else if (isExpert && (task.expertReviewId ?? null) === null) {
+      reviewPromptShown.current = true;
+      setShowReviewModal(true);
+    }
+  }, [task, user]);
 
   const requireAuth = (action: () => void) => {
     if (isGuestMode || !user) {
@@ -261,8 +293,13 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
           <View style={styles.avatar}>
             <Icon name={Icons.user} size={18} color={COLORS.textSecondary} />
           </View>
-          <View>
-            <Text style={styles.postedBy}>{task.createdByName}</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={styles.postedBy}>{task.createdByName}</Text>
+              {posterTrustScore !== null && (
+                <TrustBadge score={posterTrustScore} size="sm" showScore={false} />
+              )}
+            </View>
             {task.createdAt && (
               <Text style={styles.postedDate}>
                 Posted {formatDeadline(task.createdAt)}
@@ -400,6 +437,28 @@ const TaskDetailsScreen: React.FC<{ navigation: any; route: any }> = ({ navigati
           </>
         )}
       </View>
+
+      {/* Review modal — auto-shown when a completed task is opened with no review yet */}
+      {user && task && showReviewModal && (() => {
+        const isRequester = task.createdBy === user.uid;
+        const subjectId   = isRequester ? (task.completedBy ?? '') : task.createdBy;
+        const subjectName = isRequester ? (task.completedByName ?? 'Expert') : task.createdByName;
+        const role: 'expert' | 'requester' = isRequester ? 'expert' : 'requester';
+        if (!subjectId) return null;
+        return (
+          <LeaveReviewModal
+            visible={showReviewModal}
+            onClose={() => setShowReviewModal(false)}
+            onSubmitted={() => setShowReviewModal(false)}
+            taskId={task.id}
+            subjectId={subjectId}
+            subjectName={subjectName}
+            role={role}
+            authorId={user.uid}
+            authorName={user.displayName ?? user.email ?? 'User'}
+          />
+        );
+      })()}
     </SafeAreaView>
   );
 };
