@@ -17,6 +17,9 @@ export type HomeStackParamList = {
     taskId: string;
     task?: any;
   };
+  TaskAction: {
+    taskId: string;
+  };
   ChatThread: {
     chat: {
       id: string;
@@ -142,6 +145,7 @@ export const ROUTES = {
   // Home Stack
   HOME: 'Home',
   TASK_DETAILS: 'TaskDetails',
+  TASK_ACTION: 'TaskAction',
   CHAT_THREAD: 'ChatThread',
   NOTIFICATIONS: 'Notifications',
   MESSAGES: 'Messages',

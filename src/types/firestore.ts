@@ -10,6 +10,8 @@ export interface User {
   trustScore: number;
   rating: number;
   totalReviews: number;
+  ratingSum: number;
+  reviewTags: Record<string, number>;
   tasksCompleted: number;
   tasksPosted: number;
   totalEarnings: number;
@@ -61,6 +63,9 @@ export interface Task {
   submissionNote?: string;
   submissionFileUrls?: string[];
   rejectionReason?: string;
+  // Review tracking (set when each party leaves a review)
+  requesterReviewId?: string | null;
+  expertReviewId?: string | null;
 }
 
 export interface Chat {
@@ -149,6 +154,19 @@ export interface AIChatSession {
   isActive: boolean;
 }
 
+export interface Review {
+  id: string;
+  taskId: string;
+  authorId: string;
+  authorName: string;
+  subjectId: string;
+  role: 'requester' | 'expert';
+  stars: number;
+  tags: string[];
+  comment: string;
+  createdAt: Date;
+}
+
 // Firestore collection references
 export const COLLECTIONS = {
   USERS: 'users',
@@ -159,6 +177,7 @@ export const COLLECTIONS = {
   WALLETS: 'wallets',
   TRANSACTIONS: 'transactions',
   AI_SESSIONS: 'aiSessions',
+  REVIEWS: 'reviews',
 } as const;
 
 // Query helpers
